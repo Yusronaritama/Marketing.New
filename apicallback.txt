@@ -1,0 +1,353 @@
+@extends('layouts.mahasiswa.app')
+
+@section('title', 'Formulir Biodata - PMB Online')
+
+@section('content')
+<div class="px-4 sm:px-6 lg:px-8 py-10 sm:py-16">
+    
+    {{-- Welcome Section --}}
+    <div class="max-w-7xl mx-auto text-center text-white">
+        <h1 class="text-4xl font-extrabold tracking-tight drop-shadow-md">Formulir Biodata Pendaftaran</h1>
+        <p class="mt-4 max-w-2xl mx-auto text-lg text-blue-100 drop-shadow">
+            Pastikan data yang Anda masukkan sudah benar dan sesuai dengan dokumen asli.
+        </p>
+    </div>
+
+    {{-- Form Content --}}
+    <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-12" x-data x-init="$nextTick(() => {
+            const elements = $el.querySelectorAll('.card-animate');
+            elements.forEach((el, index) => {
+                el.style.animationDelay = `${index * 150}ms`;
+                el.classList.add('animate-slideInUp');
+            });
+        })">
+        
+        <form action="{{ route('mahasiswa.biodata.store') }}" method="POST" class="space-y-8">
+            @csrf
+
+            {{-- Data Diri Section --}}
+            <div class="bg-white p-6 sm:p-8 rounded-xl shadow-lg border border-gray-200 card-animate opacity-0">
+                <h2 class="text-xl font-semibold text-gray-800 border-b pb-4 mb-6">Data Diri</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                    {{-- Nama Lengkap --}}
+                    <div class="md:col-span-2">
+                        <label for="nama_lengkap" class="block text-sm font-medium text-gray-700">Nama Lengkap (sesuai Ijazah)</label>
+                        <div class="relative mt-1">
+                            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                <svg class="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M10 8a3 3 0 100-6 3 3 0 000 6zM3.465 14.493a1.23 1.23 0 00.41 1.412A9.957 9.957 0 0010 18c2.31 0 4.438-.784 6.131-2.1.43-.333.604-.903.41-1.412A6.998 6.998 0 0010 11.5a6.998 6.998 0 00-6.535 2.993z" />
+                                </svg>
+                            </div>
+                            <input type="text" name="nama_lengkap" id="nama_lengkap" 
+                                   class="block w-full rounded-md border-gray-300 pl-10 p-2 shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                   value="{{ old('nama_lengkap') }}">
+                        </div>
+                    </div>
+
+                    {{-- NIK --}}
+                    <div class="md:col-span-2">
+                        <label for="nik" class="block text-sm font-medium text-gray-700">Nomor Induk Kependudukan (NIK)</label>
+                        <div class="relative mt-1">
+                            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                <svg class="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M2.5 3A1.5 1.5 0 001 4.5v11A1.5 1.5 0 002.5 17h15a1.5 1.5 0 001.5-1.5v-11A1.5 1.5 0 0017.5 3h-15zM2 4.5a.5.5 0 01.5-.5h15a.5.5 0 01.5.5v2.329a.75.75 0 000 .342V15.5a.5.5 0 01-.5.5h-15a.5.5 0 01-.5-.5v-8.329a.75.75 0 000-.342V4.5zM4.75 10.25a.75.75 0 01.75-.75h3a.75.75 0 010 1.5h-3a.75.75 0 01-.75-.75zm0 2.5a.75.75 0 01.75-.75h3a.75.75 0 010 1.5h-3a.75.75 0 01-.75-.75zM12 10a1 1 0 100 2 1 1 0 000-2z" />
+                                </svg>
+                            </div>
+                            <input type="text" name="nik" id="nik" 
+                                   class="block w-full rounded-md border-gray-300 pl-10 p-2 shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                   value="{{ old('nik') }}">
+                        </div>
+                    </div>
+
+                    {{-- Tempat Lahir --}}
+                    <div>
+                        <label for="tempat_lahir" class="block text-sm font-medium text-gray-700">Tempat Lahir</label>
+                        <div class="relative mt-1">
+                            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                <svg class="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M9.69 18.933l.003.001C9.89 19.02 10 19 10 19s.11.02.308-.066l.002-.001.006-.003.018-.008a5.741 5.741 0 00.281-.14c.186-.096.446-.24.757-.433.62-.384 1.445-.976 2.4-1.77C15.75 14.94 17 12.76 17 10c0-3.866-3.134-7-7-7S3 6.134 3 10c0 2.76 1.25 4.94 3.25 6.174 1.05.87 1.9-1.52 2.5-1.8zM10 11a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                            <input type="text" name="tempat_lahir" id="tempat_lahir" 
+                                   class="block w-full rounded-md border-gray-300 pl-10 p-2 shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                   value="{{ old('tempat_lahir') }}">
+                        </div>
+                    </div>
+
+                    {{-- Tanggal Lahir --}}
+                    <div>
+                        <label for="tanggal_lahir" class="block text-sm font-medium text-gray-700">Tanggal Lahir</label>
+                        <input type="date" name="tanggal_lahir" id="tanggal_lahir" 
+                               class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                               value="{{ old('tanggal_lahir') }}">
+                    </div>
+
+                    {{-- Jenis Kelamin --}}
+                    <div>
+                        <label for="jenis_kelamin" class="block text-sm font-medium text-gray-700">Jenis Kelamin</label>
+                        <select name="jenis_kelamin" id="jenis_kelamin" 
+                                class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">Pilih Jenis Kelamin</option>
+                            <option value="Laki-laki" {{ old('jenis_kelamin') == 'Laki-laki' ? 'selected' : '' }}>Laki-laki</option>
+                            <option value="Perempuan" {{ old('jenis_kelamin') == 'Perempuan' ? 'selected' : '' }}>Perempuan</option>
+                        </select>
+                    </div>
+
+                    {{-- Agama --}}
+                    <div>
+                        <label for="agama" class="block text-sm font-medium text-gray-700">Agama</label>
+                        <div class="relative mt-1">
+                            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                <svg class="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M10 2c-1.716 0-3.408.106-5.07.31C3.806 2.45 3 3.414 3 4.555v1.094a1 1 0 001 1h12a1 1 0 001-1V4.555c0-1.141-.806-2.105-1.93-2.244A22.78 22.78 0 0010 2zM3 9v7.555c0 1.141.806 2.105 1.93 2.244A22.78 22.78 0 0010 19a22.78 22.78 0 005.07-1.201c1.124-.139 1.93-1.103 1.93-2.244V9H3z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                            <input type="text" name="agama" id="agama" 
+                                   class="block w-full rounded-md border-gray-300 pl-10 p-2 shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                   value="{{ old('agama') }}">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Data Kartu Keluarga Section --}}
+            <div class="bg-white p-6 sm:p-8 rounded-xl shadow-lg border border-gray-200 card-animate opacity-0">
+                <h2 class="text-xl font-semibold text-gray-800 border-b pb-4 mb-6">Data Kartu Keluarga (KK)</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                    {{-- No KK --}}
+                    <div>
+                        <label for="no_kk" class="block text-sm font-medium text-gray-700">Nomor Kartu Keluarga</label>
+                        <div class="relative mt-1">
+                            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                <svg class="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M3.25 4A2.25 2.25 0 001 6.25v7.5A2.25 2.25 0 003.25 16h13.5A2.25 2.25 0 0019 13.75v-7.5A2.25 2.25 0 0016.75 4H3.25zM16.5 6.25a.75.75 0 00-.75-.75H4a.75.75 0 00-.75.75v3.24a.75.75 0 001.5 0V7.3l.082.027a4.5 4.5 0 012.23 2.23l.028.083V11.5a.75.75 0 001.5 0v-.94l.082.027a4.5 4.5 0 012.23 2.23l.028.083V13a.75.75 0 001.5 0v-.94l.082.027a4.5 4.5 0 012.23 2.23l.028.083V13.75a.75.75 0 001.5 0v-7.5z" />
+                                </svg>
+                            </div>
+                            <input type="text" name="no_kk" id="no_kk" 
+                                   class="block w-full rounded-md border-gray-300 pl-10 p-2 shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                   value="{{ old('no_kk') }}">
+                        </div>
+                    </div>
+
+                    {{-- Nama Kepala Keluarga --}}
+                    <div>
+                        <label for="nama_kepala_keluarga" class="block text-sm font-medium text-gray-700">Nama Kepala Keluarga</label>
+                        <div class="relative mt-1">
+                            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                <svg class="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M10 8a3 3 0 100-6 3 3 0 000 6zM3.465 14.493a1.23 1.23 0 00.41 1.412A9.957 9.957 0 0010 18c2.31 0 4.438-.784 6.131-2.1.43-.333.604-.903.41-1.412A6.998 6.998 0 0010 11.5a6.998 6.998 0 00-6.535 2.993z" />
+                                </svg>
+                            </div>
+                            <input type="text" name="nama_kepala_keluarga" id="nama_kepala_keluarga" 
+                                   class="block w-full rounded-md border-gray-300 pl-10 p-2 shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                   value="{{ old('nama_kepala_keluarga') }}">
+                        </div>
+                    </div>
+
+                    {{-- Alamat KK --}}
+                    <div class="md:col-span-2">
+                        <label for="alamat_kk" class="block text-sm font-medium text-gray-700">Alamat (sesuai KK)</label>
+                        <textarea name="alamat_kk" id="alamat_kk" rows="3" 
+                                  class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">{{ old('alamat_kk') }}</textarea>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Data Pendidikan Section --}}
+            <div class="bg-white p-6 sm:p-8 rounded-xl shadow-lg border border-gray-200 card-animate opacity-0">
+                <h2 class="text-xl font-semibold text-gray-800 border-b pb-4 mb-6">Data Pendidikan Terakhir (Ijazah)</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                    {{-- Asal Sekolah --}}
+                    <div class="md:col-span-2">
+                        <label for="asal_sekolah" class="block text-sm font-medium text-gray-700">Asal Sekolah</label>
+                        <div class="relative mt-1">
+                            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                <svg class="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M4.25 5.5a.75.75 0 00-.75.75v8.5c0 .414.336.75.75.75h11.5a.75.75 0 00.75-.75v-8.5a.75.75 0 00-.75-.75H4.25zM2.75 6.25c0-.828.672-1.5 1.5-1.5h11.5c.828 0 1.5.672 1.5 1.5v8.5c0 .828-.672 1.5-1.5 1.5H4.25c-.828 0-1.5-.672-1.5-1.5v-8.5zM9 12a1 1 0 102 0 1 1 0 00-2 0z" />
+                                </svg>
+                            </div>
+                            <input type="text" name="asal_sekolah" id="asal_sekolah" 
+                                   class="block w-full rounded-md border-gray-300 pl-10 p-2 shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                   value="{{ old('asal_sekolah') }}">
+                        </div>
+                    </div>
+
+                    {{-- NISN --}}
+                    <div>
+                        <label for="nisn" class="block text-sm font-medium text-gray-700">NISN</label>
+                        <div class="relative mt-1">
+                            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                <svg class="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M15.99 4.93a.75.75 0 01.01 1.06l-4.25 4.25a.75.75 0 01-1.06 0l-2.25-2.25a.75.75 0 011.06-1.06l1.72 1.72 3.72-3.72a.75.75 0 011.06-.01z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                            <input type="text" name="nisn" id="nisn" 
+                                   class="block w-full rounded-md border-gray-300 pl-10 p-2 shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                   value="{{ old('nisn') }}">
+                        </div>
+                    </div>
+
+                    {{-- No Ijazah --}}
+                    <div>
+                        <label for="no_ijazah" class="block text-sm font-medium text-gray-700">Nomor Seri Ijazah</label>
+                        <div class="relative mt-1">
+                            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                <svg class="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M10.75 2.75a.75.75 0 00-1.5 0v8.614L6.295 8.235a.75.75 0 10-1.09 1.03l4.25 4.5a.75.75 0 001.09 0l4.25-4.5a.75.75 0 00-1.09-1.03l-2.955 3.129V2.75z" />
+                                    <path d="M3.5 12.75a.75.75 0 00-1.5 0v2.5A2.75 2.75 0 004.75 18h10.5A2.75 2.75 0 0018 15.25v-2.5a.75.75 0 00-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5z" />
+                                </svg>
+                            </div>
+                            <input type="text" name="no_ijazah" id="no_ijazah" 
+                                   class="block w-full rounded-md border-gray-300 pl-10 p-2 shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                   value="{{ old('no_ijazah') }}">
+                        </div>
+                    </div>
+
+                    {{-- Jurusan Sekolah --}}
+                    <div>
+                        <label for="jurusan_sekolah" class="block text-sm font-medium text-gray-700">Jurusan</label>
+                        <input type="text" name="jurusan_sekolah" id="jurusan_sekolah" 
+                               class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                               value="{{ old('jurusan_sekolah') }}">
+                    </div>
+
+                    {{-- Tahun Lulus --}}
+                    <div>
+                        <label for="tahun_lulus" class="block text-sm font-medium text-gray-700">Tahun Lulus</label>
+                        <input type="number" name="tahun_lulus" id="tahun_lulus" placeholder="YYYY" 
+                               class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                               value="{{ old('tahun_lulus') }}">
+                    </div>
+                </div>
+            </div>
+
+            {{-- Submit Button --}}
+            <div class="sticky bottom-0 z-10 card-animate opacity-0">
+                <div class="bg-white/80 backdrop-blur-sm p-4 flex justify-end rounded-t-xl shadow-[0_-4px_10px_-5px_rgba(0,0,0,0.1)] border-t border-gray-200">
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-transform transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-blue-300">
+                        Simpan Semua Perubahan
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+@endsection
+<script src="{{ asset('assets/js/bundle.js') }}"></script>
+
+
+
+
+
+
+
+
+
+public function callback()
+    {
+
+        $this->load->library('bnienc');
+        $client_id = $this->client_id;
+        $secret_key = $this->secret_key;
+        $data = file_get_contents('php://input');
+        $client = new Client();
+        /*$data =json_encode( array(
+			"data"=>"HRYdRkZNGEUcGEZiNFZcCklTTQVVNBpMGx0eGCJLEhcOEQQOfAddB0VXdkV5RFYLV1sPHDpOGkkYIR8WHk0cGBkfEkZJNhI4Rl0OVwJSSwVMVEtTfDUmNSZPXkNfNC41NgYfNGZhP15AB1kzVisrMi8wLjFfWwtDBV9bWUl5T1ZhU1Y6TTcfQhQbRxQ4DQkGSmBaRwYKR3VUWVtTXTcgCB8ZEUVHRAhCBUsQUAhRRwdWXE9FB3RlAElcWUFOAVJfVloHTjZOFUMXF0gJPgRac2NXTlEPcVcLRQ0jAxpRGB0fFgRENXlKBklfAFF7QFd3YlRSUAw4IjYZGhcdFkUaExobAUZIThhGHRpQBT8HSnRhS15PBHhLA0VnUkdbCEJTW1UdSkRJB00JGUgYSg8aRhcbGzdMQyNJEyUbFhVIGSEcFQQV",
+			"client_id"=> "251"
+		
+		));*/
+        $data_json = json_decode($data, true);
+
+
+        //print_r($data_json);
+        if (!$data_json) {
+            // handling orang iseng
+            echo '{"status":"999","message":"jangan iseng :D"}';
+        } else {
+            if ($data_json['client_id'] === $client_id) {
+                $this->load->model('Mastah');
+                $this->load->model('Master_virtual_model');
+                $data_asli = $this->bnienc->decrypt(
+                    $data_json['data'],
+                    $client_id,
+                    $secret_key
+                );
+
+                if (!$data_asli) {
+                    // handling jika waktu server salah/tdk sesuai atau secret key salah
+                    echo '{"status":"999","message":"waktu server tidak sesuai NTP atau secret key salah."}';
+                } else {
+                    // insert data asli ke db
+                    /* $data_asli = array(
+                            'trx_id' => '', // silakan gunakan parameter berikut sebagai acuan nomor tagihan
+                            'virtual_account' => '',
+                            'customer_name' => '',
+                            'trx_amount' => '',
+                            'payment_amount' => '',
+                            'cumulative_payment_amount' => '',
+                            'payment_ntb' => '',
+                            'datetime_payment' => '',
+                            'datetime_payment_iso8601' => '',
+                        ); */
+
+                    $data_va = array(
+                        'va_bni' => $data_asli['virtual_account'],
+                        'trx_id' => $data_asli['trx_id'],
+                        'payment_ntb' => $data_asli['payment_ntb'],
+                        'datetime_payment' => $data_asli['datetime_payment'],
+                        'status_va' => 1
+                    );
+                    $where_array = array(
+                        'va_bni' => $data_asli['virtual_account'],
+                    );
+                    //echo $cek[0]->va;
+                    $this->Mastah->update($where_array, $data_va, 'master_virtual');
+
+                    $ambil_va = $this->Master_virtual_model->get_by_id_bni($data_asli['virtual_account']);
+
+                    $this->load->helper('date');
+                    $tanggal_sekarang = date('y-m-d');
+
+                    $check = $this->Mastah->cek_va_($ambil_va->va);
+                    if ($check) {
+
+                        $datalogin = array(
+
+                            'status' => 1,
+                            'tanggal_reg' => $tanggal_sekarang,
+                            'input' => 'bni'
+                        );
+                        $this->Mastah->update_login_va_cuy($datalogin, $ambil_va->va);
+                    } else {
+
+                        $data = array(
+                            'id' => $ambil_va->va,
+                            'pass' => md5($ambil_va->no_hp),
+                            'level' => 2,
+                            'status' => 1,
+                            'tanggal_reg' => date('y-m-d'),
+                            'no_ujian' => $ambil_va->va,
+                            'input' => 'bni'
+                        );
+
+                        /*$datalogin=array(
+                            'id'=>$ambil_va->va,
+                            'pass'=>md5($ambil_va->no_hp),
+                            'level'=>2,
+                            'status'=>1,
+                            'tanggal_reg'=>$tanggal_sekarang,
+                            'no_ujian'=>$ambil_va->va,
+                            'input'=>'bni'
+                            );
+							$this->Mastah->insert_login($datalogin); */
+
+                        $this->Mastah->insert_login_va_cuy($data);
+                    }
+
+
+                    echo '{"status":"000"}';
+                    $this->create_elearning_acount($ambil_va->va);
+                }
+            }
+        }
+    }

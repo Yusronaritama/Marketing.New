@@ -1,0 +1,20 @@
+<?php
+
+namespace Database\Seeders;
+
+use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
+
+class JalurPendaftaranSeeder extends Seeder
+{
+    public function run()
+    {
+        DB::table('jalur_pendaftarans')->insert([
+            ['nama_jalur' => 'Jalur Reguler'],
+            ['nama_jalur' => 'Jalur Ekstensi'],
+            ['nama_jalur' => 'Pindahan'],
+            ['nama_jalur' => 'Jalur S2 Manajemen'],
+            ['nama_jalur' => 'Jalur RPL'],
+        ]);
+    }
+}

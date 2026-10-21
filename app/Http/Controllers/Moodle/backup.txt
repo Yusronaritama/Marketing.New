@@ -1,0 +1,816 @@
+public function mod_quiz_get_user_attempts2($id_pendaftaran)
+    {
+        $data = $this->Crud->get('no_ujian', ['id_pendaftar' => $id_pendaftaran])->row();
+
+        if ($data->id_elearning != '') {
+            require_once(APPPATH . 'libraries/MoodleRest.php');
+            $MoodleRest = new MoodleRest('https://elearning2.ubpkarawang.ac.id/webservice/rest/server.php', '9d812708c38116dbbe03864ccb860b52');
+            $input = array();
+
+            $users = array('quizid' => 1197, 'userid' => $data->id_elearning);
+            $groups = $MoodleRest->request('mod_quiz_get_user_attempts', $users);
+            // print_r($groups);die();
+            if (isset($groups['exception'])) {
+                $errorcode = $groups['exception'];
+                return $errorcode;
+            } else {
+                // Tidak ada 'exception', proses data $groups
+                // Proses atau tampilkan data dari $groups
+                $hasil = $groups['attempts'][0]['sumgrades'];
+                // return $hasil;
+                // die;
+                if ($hasil > 0) {
+                    //print_r($groups['attempts'][0]['sumgrades']);
+                    $query = array(
+                        'id_pendaftaran' => $id_pendaftaran,
+                        'nilai' => $groups['attempts'][0]['sumgrades'],
+                        'ket' => 'elearning.ubpkarawang.ac.id',
+                        'nama_petugas' => 'TIM BOC',
+                    );
+                    $dataz = $this->Crud->get('nilai', ['id_pendaftaran' => $id_pendaftaran])->row();
+                    if (!$dataz) {
+                        $this->Crud->insert('nilai', $query);
+                    }
+
+
+                    // $nilai = array(
+                    // 	'21201'=>12,
+                    // 	'26201'=>12,
+                    // 	'48201'=>23,
+                    // 	'55201'=>12,
+                    // 	'57201'=>12,
+                    // 	'61201'=>15,
+                    // 	'62201'=>12,
+                    // 	'73201'=>15,
+                    // 	'74201'=>12,
+                    // 	'86206'=>12,
+                    // 	'87205'=>5,
+                    // );
+
+                    $nilai = array(
+                        '21201' => 17,
+                        '26201' => 17,
+                        '48201' => 1,
+                        '55201' => 17,
+                        '57201' => 17,
+                        '61201' => 20,
+                        '62201' => 17,
+                        '73201' => 20,
+                        '74201' => 17,
+                        '86206' => 17,
+                        '87205' => 5,
+                        '86230' => 5,
+                    );
+
+
+
+                    $data = $this->Crud->get('pendaftaran', ['id' => $id_pendaftaran])->row();
+
+
+                    //echo $nilai[$p1];
+                    $p1 = $data->programstudi_dipilih;
+                    // return [$nilai[$p1], $hasil];
+                    // die;
+                    if ($hasil > $nilai[$p1]) {
+                        if ($p1 != '48201') {
+                            $query = array(
+                                'id_pendaftaran' => $id_pendaftaran,
+                                'prodi' => $p1,
+                                'status_lulus' => '1',
+                                'nama_petugas' => 'TIM BOC',
+                                'ket' => 'elearning.ubpkarawang.ac.id',
+                            );
+                            $this->Crud->insert('kululusan', $query);
+                            return 'Pilihan 1';
+                        }
+                        return true;
+                    }
+
+                    $p2 = $data->programstudi_dipilihdua;
+                    if ($hasil > $nilai[$p2]) {
+                        if ($p1 != '48201') {
+                            $query = array(
+                                'id_pendaftaran' => $id_pendaftaran,
+                                'prodi' => $p1,
+                                'status_lulus' => '1',
+                                'nama_petugas' => 'TIM BOC',
+                                'ket' => 'elearning.ubpkarawang.ac.id',
+                            );
+                            $this->Crud->insert('kululusan', $query);
+                            return 'Pilihan 2';
+                        }
+                        return true;
+                        // }
+
+                        // $p3=$data->programstudi_dipilihtiga;
+                        // if($hasil > $nilai[$p3] ){
+                        // 	$query=array(
+                        // 		'id_pendaftaran'=>$id_pendaftaran,
+                        // 		'prodi'=>$p3,
+                        // 		'status_lulus'=>'1',
+                        // 		'nama_petugas'=>'TIM BOC',
+                        // 		'ket'=>'elearning.ubpkarawang.ac.id',
+                        // 	);
+                        // 	$this->crud->insert('kululusan',$query);
+                        // 	return 'cek';
+                    } else {
+                        $query = array(
+                            'id_pendaftaran' => $id_pendaftaran,
+                            'prodi' => $p1,
+                            'status_lulus' => '2',
+                            'nama_petugas' => 'TIM BOC',
+                            'ket' => 'elearning.ubpkarawang.ac.id',
+                        );
+                        $this->Crud->insert('kululusan', $query);
+                        return 'Gagal';
+                    }
+                }
+                return "gagal3";
+            }
+            
+        } else {
+            return "gagal1";
+        }
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    ====================================================BARU================================
+
+    coba sesuaikan dengan contoh yang ada disini
+
+public function update_boc_course($id_user)
+	{
+		require_once(APPPATH . 'libraries/MoodleRest.php');
+		$MoodleRest = new MoodleRest('https://elearning2.ubpkarawang.ac.id/webservice/rest/server.php', '9d812708c38116dbbe03864ccb860b52');
+
+		$users = array('enrolments' => array(array(
+			'roleid' => '5',
+			'userid' => $id_user,
+			'courseid' => '384',
+		)));
+		$userss = array(
+			'courseid' => '384',
+			'password' => 'PMBUBP2020'
+		);
+		$groups = $MoodleRest->request('enrol_manual_enrol_users', $users);
+		return;
+		// print_r($groups);
+	}
+
+public function mod_quiz_get_user_attempts2($id_pendaftaran)
+    {
+        $data = $this->Crud->get('no_ujian', ['id_pendaftar' => $id_pendaftaran])->row();
+
+        if ($data->id_elearning != '') {
+            require_once(APPPATH . 'libraries/MoodleRest.php');
+            $MoodleRest = new MoodleRest('https://elearning2.ubpkarawang.ac.id/webservice/rest/server.php', '9d812708c38116dbbe03864ccb860b52');
+            $input = array();
+
+            $users = array('quizid' => 1197, 'userid' => $data->id_elearning);
+            $groups = $MoodleRest->request('mod_quiz_get_user_attempts', $users);
+            // print_r($groups);die();
+            if (isset($groups['exception'])) {
+                $errorcode = $groups['exception'];
+                return $errorcode;
+            } else {
+                // Tidak ada 'exception', proses data $groups
+                // Proses atau tampilkan data dari $groups
+                $hasil = $groups['attempts'][0]['sumgrades'];
+                // return $hasil;
+                // die;
+                if ($hasil > 0) {
+                    //print_r($groups['attempts'][0]['sumgrades']);
+                    $query = array(
+                        'id_pendaftaran' => $id_pendaftaran,
+                        'nilai' => $groups['attempts'][0]['sumgrades'],
+                        'ket' => 'elearning.ubpkarawang.ac.id',
+                        'nama_petugas' => 'TIM BOC',
+                    );
+                    $dataz = $this->Crud->get('nilai', ['id_pendaftaran' => $id_pendaftaran])->row();
+                    if (!$dataz) {
+                        $this->Crud->insert('nilai', $query);
+                    }
+
+
+                    // $nilai = array(
+                    // 	'21201'=>12,
+                    // 	'26201'=>12,
+                    // 	'48201'=>23,
+                    // 	'55201'=>12,
+                    // 	'57201'=>12,
+                    // 	'61201'=>15,
+                    // 	'62201'=>12,
+                    // 	'73201'=>15,
+                    // 	'74201'=>12,
+                    // 	'86206'=>12,
+                    // 	'87205'=>5,
+                    // );
+
+                    $nilai = array(
+                        '21201' => 17,
+                        '26201' => 17,
+                        '48201' => 1,
+                        '55201' => 17,
+                        '57201' => 17,
+                        '61201' => 20,
+                        '62201' => 17,
+                        '73201' => 20,
+                        '74201' => 17,
+                        '86206' => 17,
+                        '87205' => 5,
+                        '86230' => 5,
+                    );
+
+
+
+                    $data = $this->Crud->get('pendaftaran', ['id' => $id_pendaftaran])->row();
+
+
+                    //echo $nilai[$p1];
+                    $p1 = $data->programstudi_dipilih;
+                    // return [$nilai[$p1], $hasil];
+                    // die;
+                    if ($hasil > $nilai[$p1]) {
+                        if ($p1 != '48201') {
+                            $query = array(
+                                'id_pendaftaran' => $id_pendaftaran,
+                                'prodi' => $p1,
+                                'status_lulus' => '1',
+                                'nama_petugas' => 'TIM BOC',
+                                'ket' => 'elearning.ubpkarawang.ac.id',
+                            );
+                            $this->Crud->insert('kululusan', $query);
+                            return 'Pilihan 1';
+                        }
+                        return true;
+                    }
+
+                    $p2 = $data->programstudi_dipilihdua;
+                    if ($hasil > $nilai[$p2]) {
+                        if ($p1 != '48201') {
+                            $query = array(
+                                'id_pendaftaran' => $id_pendaftaran,
+                                'prodi' => $p1,
+                                'status_lulus' => '1',
+                                'nama_petugas' => 'TIM BOC',
+                                'ket' => 'elearning.ubpkarawang.ac.id',
+                            );
+                            $this->Crud->insert('kululusan', $query);
+                            return 'Pilihan 2';
+                        }
+                        return true;
+                        // }
+
+                        // $p3=$data->programstudi_dipilihtiga;
+                        // if($hasil > $nilai[$p3] ){
+                        // 	$query=array(
+                        // 		'id_pendaftaran'=>$id_pendaftaran,
+                        // 		'prodi'=>$p3,
+                        // 		'status_lulus'=>'1',
+                        // 		'nama_petugas'=>'TIM BOC',
+                        // 		'ket'=>'elearning.ubpkarawang.ac.id',
+                        // 	);
+                        // 	$this->crud->insert('kululusan',$query);
+                        // 	return 'cek';
+                    } else {
+                        $query = array(
+                            'id_pendaftaran' => $id_pendaftaran,
+                            'prodi' => $p1,
+                            'status_lulus' => '2',
+                            'nama_petugas' => 'TIM BOC',
+                            'ket' => 'elearning.ubpkarawang.ac.id',
+                        );
+                        $this->Crud->insert('kululusan', $query);
+                        return 'Gagal';
+                    }
+                }
+                return "gagal3";
+            }
+            
+        } else {
+            return "gagal1";
+        }
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Bot Dashboard</title>
+    <!-- Gunakan qrcode.js dari CDN yang berbeda -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">
+                <i class="fab fa-whatsapp text-green-500 mr-3"></i>
+                WhatsApp Bot Dashboard
+            </h1>
+            <p class="text-gray-600">Kelola koneksi WhatsApp bot Anda</p>
+        </div>
+
+        <!-- Main Content -->
+        <div class="max-w-4xl mx-auto">
+            <!-- Status Card -->
+            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-semibold text-gray-800">Status Koneksi</h2>
+                    <div class="flex space-x-2">
+                        <button id="refreshStatus" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition duration-200 flex items-center">
+                            <i class="fas fa-sync-alt mr-2"></i>Refresh
+                        </button>
+                        <button id="restartBot" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition duration-200 flex items-center">
+                            <i class="fas fa-power-off mr-2"></i>Restart Bot
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="statusContainer" class="space-y-4">
+                    <!-- Status akan di-load via JavaScript -->
+                    <div class="text-center py-8">
+                        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+                        <p class="text-gray-500 mt-2">Memuat status...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- QR Code Card -->
+            <div id="qrCard" class="bg-white rounded-lg shadow-md p-6 mb-6 hidden">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">Scan QR Code</h2>
+                
+                <div class="text-center">
+                    <div class="mb-4">
+                        <div id="qrCodeContainer" class="inline-block p-4 bg-white border rounded-lg">
+                            <!-- QR Code akan ditampilkan di sini -->
+                        </div>
+                    </div>
+                    
+                    <div class="text-sm text-gray-600 mb-4">
+                        <p class="mb-2">📱 Buka WhatsApp di ponsel Anda</p>
+                        <p class="mb-2">⚙️ Tap menu <strong>Linked Devices</strong></p>
+                        <p class="mb-2">📷 Tap <strong>Link a Device</strong> dan scan QR code di atas</p>
+                    </div>
+
+                    <div class="flex justify-center space-x-4">
+                        <button id="downloadQR" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition duration-200 flex items-center">
+                            <i class="fas fa-download mr-2"></i>Download QR
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Connection Info -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Server Info -->
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-server mr-2 text-blue-500"></i>Informasi Server
+                    </h3>
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Status Server:</span>
+                            <span id="serverStatus" class="font-medium">Loading...</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Terakhir Update:</span>
+                            <span id="lastUpdate" class="font-medium">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Sumber Data:</span>
+                            <span id="dataSource" class="font-medium">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-bolt mr-2 text-yellow-500"></i>Quick Actions
+                    </h3>
+                    <div class="space-y-3">
+                        <button id="syncStatus" class="w-full bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition duration-200 flex items-center">
+                            <i class="fas fa-sync mr-2"></i>Sync Status Manual
+                        </button>
+                        <button id="testConnection" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg transition duration-200 flex items-center">
+                            <i class="fas fa-wifi mr-2"></i>Test Koneksi Server
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed top-4 right-4 p-4 rounded-lg shadow-lg hidden max-w-sm">
+        <div class="flex items-center">
+            <i id="toastIcon" class="text-xl mr-3"></i>
+            <div>
+                <p id="toastMessage" class="font-medium"></p>
+            </div>
+            <button onclick="hideToast()" class="ml-4 text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script>
+        class WhatsAppDashboard {
+            constructor() {
+                this.statusEndpoint = "{{ route('admin.whatsapp.status') }}";
+                this.submitQREndpoint = "{{ route('admin.whatsapp.submit-qr') }}";
+                this.syncEndpoint = "{{ route('admin.whatsapp.sync-status') }}";
+                this.restartEndpoint = "{{ route('admin.whatsapp.restart-bot') }}";
+                this.pollingInterval = null;
+                this.isPolling = false;
+                
+                this.initializeEventListeners();
+                this.loadStatus();
+                this.startPolling();
+            }
+
+            initializeEventListeners() {
+                // Refresh status
+                document.getElementById('refreshStatus').addEventListener('click', () => {
+                    this.loadStatus(true);
+                });
+
+                // Sync status manual
+                document.getElementById('syncStatus').addEventListener('click', () => {
+                    this.syncStatus();
+                });
+
+                // Test connection
+                document.getElementById('testConnection').addEventListener('click', () => {
+                    this.testConnection();
+                });
+
+                // Restart bot
+                document.getElementById('restartBot').addEventListener('click', () => {
+                    this.restartBot();
+                });
+
+                // Download QR
+                document.getElementById('downloadQR').addEventListener('click', () => {
+                    this.downloadQR();
+                });
+            }
+
+            async loadStatus(forceRefresh = false) {
+                try {
+                    const url = forceRefresh ? `${this.statusEndpoint}?force_refresh=true` : this.statusEndpoint;
+                    const response = await fetch(url);
+                    const result = await response.json();
+
+                    if (result.success) {
+                        this.updateUI(result.data);
+                        this.updateServerInfo(result);
+                    } else {
+                        this.showError('Gagal memuat status: ' + (result.message || 'Unknown error'));
+                    }
+                } catch (error) {
+                    console.error('Error loading status:', error);
+                    this.showError('Terjadi kesalahan saat memuat status');
+                }
+            }
+
+            updateUI(statusData) {
+                const statusContainer = document.getElementById('statusContainer');
+                const qrCard = document.getElementById('qrCard');
+                
+                let statusHtml = '';
+
+                switch (statusData.status) {
+                    case 'connected':
+                        statusHtml = `
+                            <div class="flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-lg">
+                                <div class="flex items-center">
+                                    <i class="fas fa-check-circle text-green-500 text-2xl mr-3"></i>
+                                    <div>
+                                        <h3 class="font-semibold text-green-800">Terhubung</h3>
+                                        <p class="text-green-600 text-sm">WhatsApp bot berhasil terhubung</p>
+                                        ${statusData.user ? `<p class="text-green-500 text-xs mt-1">User: ${statusData.user}</p>` : ''}
+                                    </div>
+                                </div>
+                                <span class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
+                                    Online
+                                </span>
+                            </div>
+                        `;
+                        qrCard.classList.add('hidden');
+                        break;
+
+                    case 'qr':
+                        statusHtml = `
+                            <div class="flex items-center justify-between p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                <div class="flex items-center">
+                                    <i class="fas fa-qrcode text-yellow-500 text-2xl mr-3"></i>
+                                    <div>
+                                        <h3 class="font-semibold text-yellow-800">Menunggu Scan QR</h3>
+                                        <p class="text-yellow-600 text-sm">Scan QR code untuk menghubungkan WhatsApp</p>
+                                    </div>
+                                </div>
+                                <span class="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium">
+                                    Waiting QR
+                                </span>
+                            </div>
+                        `;
+                        qrCard.classList.remove('hidden');
+                        this.generateQRCode(statusData.qr);
+                        break;
+
+                    case 'connecting':
+                        statusHtml = `
+                            <div class="flex items-center justify-between p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                <div class="flex items-center">
+                                    <i class="fas fa-sync-alt text-blue-500 text-2xl mr-3 animate-spin"></i>
+                                    <div>
+                                        <h3 class="font-semibold text-blue-800">Sedang Menghubungkan...</h3>
+                                        <p class="text-blue-600 text-sm">WhatsApp bot sedang memulai koneksi</p>
+                                    </div>
+                                </div>
+                                <span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+                                    Connecting
+                                </span>
+                            </div>
+                        `;
+                        qrCard.classList.add('hidden');
+                        break;
+
+                    case 'disconnected':
+                    default:
+                        statusHtml = `
+                            <div class="flex items-center justify-between p-4 bg-red-50 border border-red-200 rounded-lg">
+                                <div class="flex items-center">
+                                    <i class="fas fa-times-circle text-red-500 text-2xl mr-3"></i>
+                                    <div>
+                                        <h3 class="font-semibold text-red-800">Terputus</h3>
+                                        <p class="text-red-600 text-sm">WhatsApp bot sedang offline</p>
+                                    </div>
+                                </div>
+                                <span class="bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-medium">
+                                    Offline
+                                </span>
+                            </div>
+                        `;
+                        qrCard.classList.add('hidden');
+                }
+
+                statusContainer.innerHTML = statusHtml;
+            }
+
+            generateQRCode(qrString) {
+                const container = document.getElementById('qrCodeContainer');
+                container.innerHTML = ''; // Clear previous QR
+                
+                if (!qrString) {
+                    container.innerHTML = '<p class="text-red-500">QR code tidak tersedia</p>';
+                    return;
+                }
+
+                try {
+                    // Gunakan qrcode-generator library
+                    const typeNumber = 0; // Auto
+                    const errorCorrectionLevel = 'L';
+                    const qr = qrcode(typeNumber, errorCorrectionLevel);
+                    qr.addData(qrString);
+                    qr.make();
+                    
+                    // Create canvas element
+                    const canvas = document.createElement('canvas');
+                    const size = 256;
+                    const cellSize = size / qr.getModuleCount();
+                    const ctx = canvas.getContext('2d');
+                    
+                    canvas.width = size;
+                    canvas.height = size;
+                    
+                    // Draw QR code
+                    for (let row = 0; row < qr.getModuleCount(); row++) {
+                        for (let col = 0; col < qr.getModuleCount(); col++) {
+                            ctx.fillStyle = qr.isDark(row, col) ? '#000000' : '#FFFFFF';
+                            ctx.fillRect(
+                                col * cellSize,
+                                row * cellSize,
+                                cellSize,
+                                cellSize
+                            );
+                        }
+                    }
+                    
+                    container.appendChild(canvas);
+                    
+                } catch (error) {
+                    console.error('Error generating QR code:', error);
+                    // Fallback: tampilkan QR string sebagai text (untuk debugging)
+                    container.innerHTML = `
+                        <div class="text-center">
+                            <p class="text-red-500 mb-2">Error generating QR code</p>
+                            <p class="text-xs text-gray-500 break-all">${qrString.substring(0, 100)}...</p>
+                        </div>
+                    `;
+                }
+            }
+
+            updateServerInfo(result) {
+                document.getElementById('serverStatus').textContent = result.success ? 'Connected' : 'Disconnected';
+                document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('id-ID');
+                document.getElementById('dataSource').textContent = result.source || 'unknown';
+                
+                // Tambahkan warna berdasarkan status
+                const serverStatus = document.getElementById('serverStatus');
+                serverStatus.className = 'font-medium ' + (result.success ? 'text-green-600' : 'text-red-600');
+            }
+
+            async syncStatus() {
+                try {
+                    this.showMessage('Menyinkronkan status...', 'info');
+                    
+                    const response = await fetch(this.syncEndpoint, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                        }
+                    });
+
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.showMessage('Status berhasil di-sync', 'success');
+                        this.loadStatus(true);
+                    } else {
+                        this.showMessage('Gagal sync status: ' + result.message, 'error');
+                    }
+                } catch (error) {
+                    console.error('Error syncing status:', error);
+                    this.showMessage('Terjadi kesalahan saat sync status', 'error');
+                }
+            }
+
+            async restartBot() {
+                if (!confirm('Apakah Anda yakin ingin merestart WhatsApp bot?')) {
+                    return;
+                }
+
+                try {
+                    this.showMessage('Merestart WhatsApp bot...', 'info');
+                    
+                    const response = await fetch(this.restartEndpoint, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                        }
+                    });
+
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.showMessage('WhatsApp bot restart berhasil', 'success');
+                        setTimeout(() => this.loadStatus(true), 2000);
+                    } else {
+                        this.showMessage('Gagal restart bot: ' + result.message, 'error');
+                    }
+                } catch (error) {
+                    console.error('Error restarting bot:', error);
+                    this.showMessage('Terjadi kesalahan saat restart bot', 'error');
+                }
+            }
+
+            downloadQR() {
+                const canvas = document.querySelector('#qrCodeContainer canvas');
+                if (canvas) {
+                    const link = document.createElement('a');
+                    link.download = 'whatsapp-qr-code.png';
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                } else {
+                    this.showMessage('Tidak ada QR code untuk di-download', 'error');
+                }
+            }
+
+            testConnection() {
+                this.showMessage('Testing koneksi server...', 'info');
+                this.loadStatus(true);
+            }
+
+            startPolling() {
+                // Poll setiap 10 detik untuk status terbaru
+                this.pollingInterval = setInterval(() => {
+                    this.loadStatus();
+                }, 10000);
+            }
+
+            stopPolling() {
+                if (this.pollingInterval) {
+                    clearInterval(this.pollingInterval);
+                }
+            }
+
+            showMessage(message, type = 'info') {
+                const toast = document.getElementById('toast');
+                const toastIcon = document.getElementById('toastIcon');
+                const toastMessage = document.getElementById('toastMessage');
+                
+                // Set warna dan icon berdasarkan type
+                const styles = {
+                    success: { bg: 'bg-green-500', icon: 'fas fa-check-circle' },
+                    error: { bg: 'bg-red-500', icon: 'fas fa-exclamation-circle' },
+                    info: { bg: 'bg-blue-500', icon: 'fas fa-info-circle' },
+                    warning: { bg: 'bg-yellow-500', icon: 'fas fa-exclamation-triangle' }
+                };
+                
+                const style = styles[type] || styles.info;
+                
+                toast.className = `fixed top-4 right-4 p-4 rounded-lg shadow-lg text-white max-w-sm ${style.bg}`;
+                toastIcon.className = style.icon;
+                toastMessage.textContent = message;
+                
+                toast.classList.remove('hidden');
+                
+                // Auto hide setelah 5 detik
+                setTimeout(() => {
+                    this.hideToast();
+                }, 5000);
+            }
+
+            hideToast() {
+                const toast = document.getElementById('toast');
+                toast.classList.add('hidden');
+            }
+
+            showError(message) {
+                this.showMessage(message, 'error');
+            }
+        }
+
+        // Global function untuk hide toast
+        function hideToast() {
+            const toast = document.getElementById('toast');
+            toast.classList.add('hidden');
+        }
+
+        // Initialize dashboard when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // Cek jika QRCode library tersedia
+            if (typeof qrcode === 'undefined') {
+                console.error('QRCode library tidak tersedia');
+                // Fallback: load library secara dinamis
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
+                script.onload = function() {
+                    console.log('QRCode library loaded dynamically');
+                    window.whatsappDashboard = new WhatsAppDashboard();
+                };
+                script.onerror = function() {
+                    console.error('Gagal load QRCode library');
+                    window.whatsappDashboard = new WhatsAppDashboard();
+                };
+                document.head.appendChild(script);
+            } else {
+                window.whatsappDashboard = new WhatsAppDashboard();
+            }
+        });
+    </script>
+</body>
+</html>

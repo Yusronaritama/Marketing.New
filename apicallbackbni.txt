@@ -1,0 +1,61 @@
+public function store()
+    {
+
+        // var_dump($this->input->post());
+        // die;
+
+        // validasi
+        $this->load->library('l_api');
+        $this->form_validation->set_rules('no_hp', 'No Hp', 'trim|required|max_length[15]|numeric');
+        $this->form_validation->set_rules('nama', 'Nama', 'trim|required|regex_match[/^[][a-zA-Z@# ,().]+$/]');
+        $this->form_validation->set_rules('email', 'Email', 'trim|required|valid_email');
+        $this->form_validation->set_rules('jalur', 'jalur', 'trim|required');
+
+        if ($this->form_validation->run() == FALSE) {
+            $this->session->set_flashdata('message', validation_errors());
+            return redirect('register/umum');
+        } else {
+
+            // sanitaze no_hp
+            $no_hp = strtoupper(sanitaze($this->input->post('no_hp', TRUE)));
+            $cek = $this->auth->cek_master_virtual($no_hp, strtoupper($this->input->post('email', TRUE)))->row();
+
+            if ($cek) {
+                $this->session->set_flashdata('message', 'Data sudah ada, silahkan login');
+                return redirect('/register/'.$cek->type.'/cetak_kartu_input_data_login/' . strtoupper($cek->no_hp));
+            }
+
+            if($this->input->post('jalur', TRUE)=='pindahan'){
+                $this->storePindahan();
+            }elseif($this->input->post('jalur', TRUE)=='umum'){
+                $this->storeUmum();
+            }
+
+            
+        }
+    }
+
+ public function storeUmum(){ //peserta didik baru
+        $no_hp = sanitaze($this->input->post('no_hp', TRUE));
+        $datalogin = array(
+            'name_va' => "UBP",
+            'no_hp' => $no_hp,
+            'nama' => strtoupper(str_replace("'", "", str_replace("`", "", $this->input->post('nama', TRUE)))),
+            'email' => strtoupper($this->input->post('email', TRUE)),
+        );
+
+        $this->crud->insert('master_virtual', $datalogin);
+        $cek = $this->auth->cek_master_virtual($no_hp, strtoupper($this->input->post('email', TRUE)))->row();
+        $respon = $this->l_api->custom_api_test($cek);
+        $data_va = array(
+            'va_bni' => $respon['virtual_account'],
+            'trx_id' => $respon['trx_id'],
+        );
+
+        $where_array = array(
+            'va' => $cek->va
+        );
+
+        $this->crud->update('master_virtual', $data_va, $where_array);
+        redirect('/register/umum/cetak_kartu_input_data_login/' . strtoupper($no_hp));
+    }

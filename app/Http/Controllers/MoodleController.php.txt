@@ -1,0 +1,1563 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+use App\Models\MoodleModel;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+class MoodleController extends Controller
+{
+    protected $moodleModel;
+
+    public function __construct()
+    {
+        $this->moodleModel = new MoodleModel();
+    }
+
+    /**
+     * MENAMPILKAN NILAI QUIZ UNTUK USERS DARI MASTER_MOODLE
+     */
+ public function getQuizNilaiForMasterMoodleUsers(Request $request)
+    {
+        try {
+            $quizId = $request->input('quiz_id', 1197);
+            $limit = $request->input('limit', 50);
+            
+            Log::info("Getting quiz nilai for master_moodle users", [
+                'quiz_id' => $quizId, 
+                'limit' => $limit
+            ]);
+            
+            $result = $this->moodleModel->getQuizNilaiForMasterMoodleUsers($quizId, $limit);
+
+            if ($result['success']) {
+                return view('admin.moodle.master-moodle-nilai', [
+                    'users' => $result['users'],
+                    'summary' => $result['summary'],
+                    'quiz_id' => $result['quiz_id'],
+                    'total_users' => $result['total_users'],
+                    'limit' => $limit,
+                    'success' => true
+                ]);
+            } else {
+                return view('admin.moodle.master-moodle-nilai', [
+                    'error' => $result['error'],
+                    'message' => $result['message'] ?? 'Gagal mengambil data nilai quiz',
+                    'quiz_id' => $quizId,
+                    'success' => false
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error getting quiz nilai for master_moodle users: ' . $e->getMessage());
+            return view('admin.moodle.master-moodle-nilai', [
+                'error' => 'Terjadi kesalahan sistem: ' . $e->getMessage(),
+                'success' => false
+            ]);
+        }
+    }
+public function getUsersFromMasterMoodle(Request $request)
+    {
+        try {
+            $limit = $request->input('limit', 50);
+            $status = $request->input('status', 'success');
+
+            $result = $this->moodleModel->getUsersFromMasterMoodle($limit, $status);
+
+            // SELALU return JSON untuk AJAX request
+            if ($request->ajax() || $request->wantsJson() || $request->is('api/*')) {
+                // Jika perlu data tambahan untuk AJAX, tambahkan di sini
+                if ($result['success'] && !empty($result['users'])) {
+                    $usersWithKelulusan = [];
+                    foreach ($result['users'] as $user) {
+                        $kelulusanData = $this->getKelulusanData($user['master_user_id']);
+                        $usersWithKelulusan[] = array_merge($user, $kelulusanData);
+                    }
+                    $result['users'] = $usersWithKelulusan;
+                }
+                return response()->json($result);
+            }
+
+            // Untuk view HTML biasa
+            if ($result['success']) {
+                // Ambil data kelulusan untuk setiap user
+                $usersWithKelulusan = [];
+                foreach ($result['users'] as $user) {
+                    $kelulusanData = $this->getKelulusanData($user['master_user_id']);
+                    $usersWithKelulusan[] = array_merge($user, $kelulusanData);
+                }
+                
+                $result['users'] = $usersWithKelulusan;
+
+                return view('admin.moodle.master-moodle-users', [
+                    'users' => $result['users'],
+                    'total_users' => $result['total_users'],
+                    'limit' => $limit,
+                    'status' => $status,
+                    'success' => true
+                ]);
+            } else {
+                return view('admin.moodle.master-moodle-users', [
+                    'error' => $result['error'],
+                    'message' => $result['message'] ?? 'Gagal mengambil data',
+                    'limit' => $limit,
+                    'status' => $status,
+                    'success' => false
+                ]);
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Error getting users from master_moodle: ' . $e->getMessage());
+            
+            // Untuk AJAX request
+            if ($request->ajax() || $request->wantsJson() || $request->is('api/*')) {
+                return response()->json([
+                    'success' => false,
+                    'error' => $e->getMessage()
+                ]);
+            }
+            
+            return view('admin.moodle.master-moodle-users', [
+                'error' => 'Terjadi kesalahan sistem: ' . $e->getMessage(),
+                'success' => false
+            ]);
+        }
+    }
+ public function syncToMasterMoodleUsers(Request $request)
+{
+    try {
+        DB::beginTransaction();
+
+        $syncType = $request->input('sync_type', 'all');
+        $usersData = $request->input('users_data', []);
+        
+        // Jika tidak ada data yang dikirim, ambil dari fungsi getUsersFromMasterMoodle
+        if (empty($usersData)) {
+            $result = $this->getUsersFromMasterMoodle(new Request(['limit' => 1000]));
+            
+            if (!$result['success']) {
+                throw new \Exception('Gagal mengambil data users: ' . ($result['error'] ?? 'Unknown error'));
+            }
+            
+            $usersData = $result['users'];
+        }
+
+        $stats = [
+            'total' => count($usersData),
+            'created' => 0,
+            'updated' => 0,
+            'skipped' => 0,
+            'errors' => 0
+        ];
+
+        foreach ($usersData as $user) {
+            try {
+                // Pastikan data yang diperlukan tersedia
+                if (empty($user['master_user_id']) || empty($user['moodle_user_id'])) {
+                    $stats['skipped']++;
+                    Log::warning('Skipping user - missing master_user_id or moodle_user_id', $user);
+                    continue;
+                }
+
+                // Cek apakah user sudah ada di master_moodle_users
+                $existingUser = DB::table('master_moodle_users')
+                                ->where('master_user_id', $user['master_user_id'])
+                                ->orWhere('moodle_user_id', $user['moodle_user_id'])
+                                ->first();
+
+                // Siapkan data untuk insert/update
+                $dataToInsert = [
+                    'master_user_id' => $user['master_user_id'],
+                    'moodle_user_id' => $user['moodle_user_id'],
+                    'username' => $user['username'] ?? '',
+                    'email' => $user['email'] ?? '',
+                    'firstname' => $user['nama'] ?? '', // Gunakan 'nama' dari data
+                    'lastname' => '', // Default kosong
+                    'updated_at' => now()
+                ];
+
+                // Tambahkan data quiz berdasarkan sync_type - PERBAIKAN DI SINI
+                if ($syncType === 'all' || $syncType === 'quiz_only') {
+                    $dataToInsert['quiz_id'] = $user['quiz_id'] ?? 1197; // Default quiz ID
+                    
+                    // PRIORITAS: Ambil nilai dari berbagai sumber yang mungkin
+                    $nilai = $user['nilai'] ?? $user['nilai_quiz'] ?? 0;
+                    $dataToInsert['nilai_quiz'] = $nilai;
+                    
+                    $dataToInsert['attempt_count'] = $user['attempt_count'] ?? 0;
+                    
+                    Log::info('Setting quiz data for user', [
+                        'master_user_id' => $user['master_user_id'],
+                        'nilai_sources' => [
+                            'user[nilai]' => $user['nilai'] ?? 'NOT SET',
+                            'user[nilai_quiz]' => $user['nilai_quiz'] ?? 'NOT SET',
+                            'final_nilai' => $nilai
+                        ],
+                        'attempt_count' => $user['attempt_count'] ?? 0
+                    ]);
+                }
+
+                // Tambahkan data kelulusan berdasarkan sync_type
+                if ($syncType === 'all' || $syncType === 'kelulusan_only') {
+                    // Gunakan data dari getKelulusanData yang sudah diproses
+                    $dataToInsert['status_kelulusan'] = $user['status_kelulusan'] ?? 'Belum diketahui';
+                    $dataToInsert['prodi_lulus'] = $user['prodi_lulus'] ?? '';
+                    $dataToInsert['nama_prodi_lulus'] = $user['nama_prodi_lulus'] ?? '';
+                    $dataToInsert['pilihan_lulus'] = $user['pilihan_lulus'] ?? '';
+                    
+                    // Hitung selisih nilai jika ada data kelulusan info
+                    if (isset($user['kelulusan_info']) && isset($user['kelulusan_info']['selisih'])) {
+                        $dataToInsert['selisih_nilai'] = $user['kelulusan_info']['selisih'];
+                    } else {
+                        $dataToInsert['selisih_nilai'] = $user['selisih_nilai'] ?? null;
+                    }
+                }
+
+                // Tambahkan data prodi pilihan
+                $dataToInsert['prodi_pilihan1'] = $user['prodi_pilihan1'] ?? '';
+                $dataToInsert['nama_prodi_pilihan1'] = $user['nama_prodi_pilihan1'] ?? '';
+                $dataToInsert['prodi_pilihan2'] = $user['prodi_pilihan2'] ?? '';
+                $dataToInsert['nama_prodi_pilihan2'] = $user['nama_prodi_pilihan2'] ?? '';
+                $dataToInsert['data_source'] = $user['data_source'] ?? 'manual';
+
+                if ($existingUser) {
+                    // Update existing record
+                    DB::table('master_moodle_users')
+                        ->where('id', $existingUser->id)
+                        ->update($dataToInsert);
+                    $stats['updated']++;
+                    
+                    Log::info('Updated user in master_moodle_users', [
+                        'master_user_id' => $user['master_user_id'],
+                        'moodle_user_id' => $user['moodle_user_id'],
+                        'nilai_quiz' => $dataToInsert['nilai_quiz'] ?? 0
+                    ]);
+                } else {
+                    // Insert new record
+                    $dataToInsert['created_at'] = now();
+                    DB::table('master_moodle_users')->insert($dataToInsert);
+                    $stats['created']++;
+                    
+                    Log::info('Created user in master_moodle_users', [
+                        'master_user_id' => $user['master_user_id'],
+                        'moodle_user_id' => $user['moodle_user_id'],
+                        'nilai_quiz' => $dataToInsert['nilai_quiz'] ?? 0
+                    ]);
+                }
+
+            } catch (\Exception $e) {
+                Log::error('Error syncing user to master_moodle_users: ' . $e->getMessage(), [
+                    'user_data' => $user
+                ]);
+                $stats['errors']++;
+            }
+        }
+
+        DB::commit();
+
+        Log::info('Sync to master_moodle_users completed', $stats);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Data berhasil disinkronisasi ke master_moodle_users',
+            'stats' => $stats,
+            'sync_type' => $syncType
+        ]);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        
+        Log::error('Error syncing to master_moodle_users: ' . $e->getMessage());
+
+        return response()->json([
+            'success' => false,
+            'error' => 'Gagal menyinkronisasi data: ' . $e->getMessage()
+        ]);
+    }
+}
+
+/**
+ * FUNGSI UNTUK MENGIRIM DATA QUIZ KE MASTER_MOODLE_USERS (REVISI)
+ */
+public function syncQuizDataToMasterMoodleUsers(Request $request)
+{
+    try {
+        $quizId = $request->input('quiz_id', 1197);
+        $limit = $request->input('limit', 100);
+
+        Log::info("Starting quiz data sync to master_moodle_users", [
+            'quiz_id' => $quizId,
+            'limit' => $limit
+        ]);
+
+        // Ambil data quiz attempts - PASTIKAN fungsi ini mengembalikan data dengan nilai
+        $result = $this->getQuizAttemptsForMasterMoodleUsers(new Request([
+            'quiz_id' => $quizId,
+            'limit' => $limit
+        ]));
+
+        if (!$result instanceof \Illuminate\Http\Response) {
+            // Jika return view, ambil data dari session atau buat ulang
+            $result = $this->moodleModel->getQuizAttemptsForMasterMoodleUsers($quizId, $limit);
+        }
+
+        if (!$result['success']) {
+            throw new \Exception('Gagal mengambil data quiz: ' . ($result['error'] ?? 'Unknown error'));
+        }
+
+        $usersData = [];
+        foreach ($result['users'] as $user) {
+            try {
+                // DEBUG: Log data user untuk memastikan nilai ada
+                Log::info('Processing user for sync', [
+                    'master_user_id' => $user['master_user_id'] ?? null,
+                    'moodle_user_id' => $user['moodle_user_id'] ?? null,
+                    'nama' => $user['nama'] ?? '',
+                    'nilai' => $user['nilai'] ?? 'NOT SET',
+                    'attempt_count' => $user['attempt_count'] ?? 0,
+                    'status_kelulusan' => $user['status_kelulusan'] ?? ''
+                ]);
+
+                // Data yang akan disimpan sesuai dengan struktur yang ditampilkan
+                $userData = [
+                    'master_user_id' => $user['master_user_id'] ?? null,
+                    'moodle_user_id' => $user['moodle_user_id'] ?? null,
+                    'username' => $user['username'] ?? '',
+                    'email' => $user['email'] ?? '',
+                    'nama' => $user['nama'] ?? '',
+                    
+                    // Data prodi pilihan
+                    'prodi_pilihan1' => $user['prodi_pilihan1'] ?? '',
+                    'nama_prodi_pilihan1' => $user['nama_prodi_pilihan1'] ?? '',
+                    'prodi_pilihan2' => $user['prodi_pilihan2'] ?? '',
+                    'nama_prodi_pilihan2' => $user['nama_prodi_pilihan2'] ?? '',
+                    'data_source' => $user['data_source'] ?? '',
+                    
+                    // Data quiz - PASTIKAN INI ADA NILAINYA
+                    'quiz_id' => $quizId,
+                    'nilai' => $user['nilai'] ?? 0, // Pastikan ini ada nilainya
+                    'nilai_quiz' => $user['nilai'] ?? 0, // Juga simpan di nilai_quiz
+                    'attempt_count' => $user['attempt_count'] ?? 0,
+                    
+                    // Data kelulusan
+                    'status_kelulusan' => $user['status_kelulusan'] ?? 'Belum diketahui',
+                    'prodi_lulus' => $user['prodi_lulus'] ?? '',
+                    'nama_prodi_lulus' => $user['nama_prodi_lulus'] ?? '',
+                    'pilihan_lulus' => $user['pilihan_lulus'] ?? '',
+                    'kelulusan_info' => $user['kelulusan_info'] ?? null
+                ];
+
+                // Tambahkan selisih nilai jika ada
+                if (isset($user['kelulusan_info']) && isset($user['kelulusan_info']['selisih'])) {
+                    $userData['selisih_nilai'] = $user['kelulusan_info']['selisih'];
+                }
+
+                $usersData[] = $userData;
+
+            } catch (\Exception $e) {
+                Log::error('Error processing user data for sync: ' . $e->getMessage(), [
+                    'user' => $user
+                ]);
+                continue;
+            }
+        }
+
+        Log::info('Processed users data for sync', [
+            'total_users' => count($usersData),
+            'sample_data' => $usersData[0] ?? 'No data'
+        ]);
+
+        // Panggil fungsi sync dengan data quiz
+        return $this->syncToMasterMoodleUsers(new Request([
+            'users_data' => $usersData,
+            'sync_type' => 'all'
+        ]));
+
+    } catch (\Exception $e) {
+        Log::error('Error syncing quiz data to master_moodle_users: ' . $e->getMessage());
+
+        return response()->json([
+            'success' => false,
+            'error' => 'Gagal menyinkronisasi data quiz: ' . $e->getMessage()
+        ]);
+    }
+}
+
+public function syncFromQuizAttemptsView(Request $request)
+{
+    try {
+        $quizId = $request->input('quiz_id', 1197);
+        $limit = $request->input('limit', 100);
+
+        // Gunakan fungsi yang sama dengan view untuk memastikan data konsisten
+        $result = $this->getQuizAttemptsForMasterMoodleUsers(new Request([
+            'quiz_id' => $quizId,
+            'limit' => $limit
+        ]));
+
+        // Jika result adalah Response (view), kita perlu ambil data dari session atau model
+        if ($result instanceof \Illuminate\Http\Response) {
+            // Ambil data langsung dari model
+            $modelResult = $this->moodleModel->getQuizAttemptsForMasterMoodleUsers($quizId, $limit);
+            
+            if (!$modelResult['success']) {
+                throw new \Exception('Gagal mengambil data dari model: ' . ($modelResult['error'] ?? 'Unknown error'));
+            }
+            
+            $users = $modelResult['users'];
+        } else {
+            $users = $result['users'];
+        }
+
+        $usersData = [];
+        foreach ($users as $user) {
+            $usersData[] = [
+                'master_user_id' => $user['master_user_id'] ?? null,
+                'moodle_user_id' => $user['moodle_user_id'] ?? null,
+                'username' => $user['username'] ?? '',
+                'email' => $user['email'] ?? '',
+                'nama' => $user['nama'] ?? '',
+                
+                // Data prodi
+                'prodi_pilihan1' => $user['prodi_pilihan1'] ?? '',
+                'nama_prodi_pilihan1' => $user['nama_prodi_pilihan1'] ?? '',
+                'prodi_pilihan2' => $user['prodi_pilihan2'] ?? '',
+                'nama_prodi_pilihan2' => $user['nama_prodi_pilihan2'] ?? '',
+                'data_source' => $user['data_source'] ?? '',
+                
+                // Data quiz - PASTIKAN ambil dari sumber yang benar
+                'quiz_id' => $quizId,
+                'nilai' => $user['nilai'] ?? 0,
+                'attempt_count' => $user['attempt_count'] ?? 0,
+                
+                // Data kelulusan
+                'status_kelulusan' => $user['status_kelulusan'] ?? 'Belum diketahui',
+                'prodi_lulus' => $user['prodi_lulus'] ?? '',
+                'nama_prodi_lulus' => $user['nama_prodi_lulus'] ?? '',
+                'pilihan_lulus' => $user['pilihan_lulus'] ?? '',
+                'kelulusan_info' => $user['kelulusan_info'] ?? null
+            ];
+        }
+
+        return $this->syncToMasterMoodleUsers(new Request([
+            'users_data' => $usersData,
+            'sync_type' => 'all'
+        ]));
+
+    } catch (\Exception $e) {
+        Log::error('Error syncing from quiz attempts view: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'error' => 'Gagal menyinkronisasi: ' . $e->getMessage()
+        ]);
+    }
+}
+/**
+ * FUNGSI UNTUK MENGIRIM DATA DARI HALAMAN USERS KE MASTER_MOODLE_USERS
+ */
+public function syncUsersDataToMasterMoodleUsers(Request $request)
+{
+    try {
+        $limit = $request->input('limit', 100);
+
+        Log::info("Starting users data sync to master_moodle_users", [
+            'limit' => $limit
+        ]);
+
+        // Ambil data users dari master_moodle dengan data kelulusan lengkap
+        $result = $this->getUsersFromMasterMoodle(new Request(['limit' => $limit]));
+
+        if (!$result['success']) {
+            throw new \Exception('Gagal mengambil data users: ' . ($result['error'] ?? 'Unknown error'));
+        }
+
+        $usersData = [];
+        foreach ($result['users'] as $user) {
+            try {
+                $usersData[] = [
+                    'master_user_id' => $user['master_user_id'] ?? null,
+                    'moodle_user_id' => $user['moodle_user_id'] ?? null,
+                    'username' => $user['username'] ?? '',
+                    'email' => $user['email'] ?? '',
+                    'nama' => $user['nama'] ?? '',
+                    
+                    // Data prodi pilihan
+                    'prodi_pilihan1' => $user['prodi_pilihan1'] ?? '',
+                    'nama_prodi_pilihan1' => $user['nama_prodi_pilihan1'] ?? '',
+                    'prodi_pilihan2' => $user['prodi_pilihan2'] ?? '',
+                    'nama_prodi_pilihan2' => $user['nama_prodi_pilihan2'] ?? '',
+                    'data_source' => $user['data_source'] ?? '',
+                    
+                    // Data kelulusan
+                    'status_kelulusan' => $user['status_kelulusan'] ?? 'Belum diketahui',
+                    'prodi_lulus' => $user['prodi_lulus'] ?? '',
+                    'nama_prodi_lulus' => $user['nama_prodi_lulus'] ?? '',
+                    'pilihan_lulus' => $user['pilihan_lulus'] ?? '',
+                    'nilai_quiz' => $user['nilai_quiz'] ?? 0,
+                    'kelulusan_info' => $user['kelulusan_info'] ?? null
+                ];
+            } catch (\Exception $e) {
+                Log::error('Error processing user data for users sync: ' . $e->getMessage(), [
+                    'user' => $user
+                ]);
+                continue;
+            }
+        }
+
+        // Panggil fungsi sync dengan data users
+        return $this->syncToMasterMoodleUsers(new Request([
+            'users_data' => $usersData,
+            'sync_type' => 'all'
+        ]));
+
+    } catch (\Exception $e) {
+        Log::error('Error syncing users data to master_moodle_users: ' . $e->getMessage());
+
+        return response()->json([
+            'success' => false,
+            'error' => 'Gagal menyinkronisasi data users: ' . $e->getMessage()
+        ]);
+    }
+}
+    public function syncKelulusanDataToMasterMoodleUsers(Request $request)
+    {
+        try {
+            $limit = $request->input('limit', 100);
+
+            // Ambil data users dari master_moodle
+            $result = $this->getUsersFromMasterMoodle(new Request(['limit' => $limit]));
+
+            if (!$result['success']) {
+                throw new \Exception('Gagal mengambil data users: ' . ($result['error'] ?? 'Unknown error'));
+            }
+
+            $usersData = [];
+            foreach ($result['users'] as $user) {
+                $usersData[] = [
+                    'master_user_id' => $user['master_user_id'] ?? null,
+                    'moodle_user_id' => $user['moodle_user_id'] ?? null,
+                    'username' => $user['username'] ?? '',
+                    'email' => $user['email'] ?? '',
+                    'firstname' => $user['nama'] ?? '',
+                    'lastname' => '',
+                    'status_kelulusan' => $user['status_kelulusan'] ?? 'Belum diketahui',
+                    'prodi_lulus' => $user['prodi_lulus'] ?? '',
+                    'nama_prodi_lulus' => $user['nama_prodi_lulus'] ?? '',
+                    'pilihan_lulus' => $user['pilihan_lulus'] ?? '',
+                    'nilai_quiz' => $user['nilai_quiz'] ?? 0
+                ];
+            }
+
+            // Panggil fungsi sync dengan data kelulusan
+            return $this->syncToMasterMoodleUsers(new Request([
+                'users_data' => $usersData,
+                'sync_type' => 'kelulusan_only'
+            ]));
+
+        } catch (\Exception $e) {
+            Log::error('Error syncing kelulusan data to master_moodle_users: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Gagal menyinkronisasi data kelulusan: ' . $e->getMessage()
+            ]);
+        }
+    }
+ public function getMasterMoodleUsers(Request $request)
+    {
+        try {
+            $limit = $request->input('limit', 50);
+            $search = $request->input('search', '');
+            $status = $request->input('status', '');
+
+            $query = DB::table('master_moodle_users')
+                     ->select('*')
+                     ->orderBy('updated_at', 'desc');
+
+            if (!empty($search)) {
+                $query->where(function($q) use ($search) {
+                    $q->where('username', 'like', "%{$search}%")
+                      ->orWhere('email', 'like', "%{$search}%")
+                      ->orWhere('firstname', 'like', "%{$search}%");
+                });
+            }
+
+            if (!empty($status)) {
+                $query->where('status_kelulusan', $status);
+            }
+
+            $users = $query->paginate($limit);
+
+            $summary = [
+                'total' => DB::table('master_moodle_users')->count(),
+                'lulus' => DB::table('master_moodle_users')->where('status_kelulusan', 'like', '%LULUS%')->count(),
+                'tidak_lulus' => DB::table('master_moodle_users')->where('status_kelulusan', 'like', '%TIDAK LULUS%')->count(),
+                'belum_diketahui' => DB::table('master_moodle_users')->where('status_kelulusan', 'Belum diketahui')->count(),
+                'punya_nilai' => DB::table('master_moodle_users')->where('nilai_quiz', '>', 0)->count()
+            ];
+
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'users' => $users,
+                    'summary' => $summary,
+                    'pagination' => [
+                        'total' => $users->total(),
+                        'per_page' => $users->perPage(),
+                        'current_page' => $users->currentPage(),
+                        'last_page' => $users->lastPage()
+                    ]
+                ]);
+            }
+
+            return view('admin.moodle.master-moodle-users-list', [
+                'users' => $users,
+                'summary' => $summary,
+                'search' => $search,
+                'status' => $status,
+                'limit' => $limit,
+                'success' => true
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error getting master_moodle_users: ' . $e->getMessage());
+
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'error' => $e->getMessage()
+                ]);
+            }
+
+            return view('admin.moodle.master-moodle-users-list', [
+                'error' => 'Terjadi kesalahan: ' . $e->getMessage(),
+                'success' => false
+            ]);
+        }
+    }
+private function getKelulusanData($masterMoodleUserId)
+{
+    try {
+        if (!$masterMoodleUserId) {
+            return [
+                'nama' => 'Tidak diketahui',
+                'email' => 'Tidak diketahui',
+                'prodi_pilihan1' => '',
+                'prodi_pilihan2' => '',
+                'nama_prodi_pilihan1' => '',
+                'nama_prodi_pilihan2' => '',
+                'kelulusan_info' => null,
+                'status_kelulusan' => 'Tidak diketahui',
+                'prodi_lulus' => '',
+                'nama_prodi_lulus' => '',
+                'pilihan_lulus' => '',
+                'data_source' => 'no_master_user_id'
+            ];
+        }
+
+        // 1. Ambil user_id dari master_users berdasarkan master_moodle.master_user_id
+        $masterUser = DB::table('master_users')
+                    ->where('id', $masterMoodleUserId)
+                    ->select('user_id')
+                    ->first();
+
+        if (!$masterUser || !$masterUser->user_id) {
+            return [
+                'nama' => 'Tidak diketahui',
+                'email' => 'Tidak diketahui',
+                'prodi_pilihan1' => '',
+                'prodi_pilihan2' => '',
+                'nama_prodi_pilihan1' => '',
+                'nama_prodi_pilihan2' => '',
+                'kelulusan_info' => null,
+                'status_kelulusan' => 'Tidak diketahui',
+                'prodi_lulus' => '',
+                'nama_prodi_lulus' => '',
+                'pilihan_lulus' => '',
+                'data_source' => 'no_master_user'
+            ];
+        }
+
+        $userId = $masterUser->user_id;
+
+        // 2. Ambil data user dari tabel users
+        $user = DB::table('users')
+                ->where('id', $userId)
+                ->select('name as nama', 'email')
+                ->first();
+
+        if (!$user) {
+            return [
+                'nama' => 'Tidak diketahui',
+                'email' => 'Tidak diketahui',
+                'prodi_pilihan1' => '',
+                'prodi_pilihan2' => '',
+                'nama_prodi_pilihan1' => '',
+                'nama_prodi_pilihan2' => '',
+                'kelulusan_info' => null,
+                'status_kelulusan' => 'Tidak diketahui',
+                'prodi_lulus' => '',
+                'nama_prodi_lulus' => '',
+                'pilihan_lulus' => '',
+                'data_source' => 'no_user'
+            ];
+        }
+
+        $nama = $user->nama ?? 'Tidak diketahui';
+        $email = $user->email ?? 'Tidak diketahui';
+
+        // 3. Ambil data prodi dari master_ereg
+        $masterEreg = DB::table('master_ereg')
+                    ->where('user_id', $userId)
+                    ->select('jurusan1 as prodi_pilihan1', 'jurusan2 as prodi_pilihan2')
+                    ->first();
+
+        $prodiPilihan1 = '';
+        $prodiPilihan2 = '';
+        $dataSource = 'master_ereg';
+
+        if ($masterEreg) {
+            // Jika data ditemukan di master_ereg
+            $prodiPilihan1 = $masterEreg->prodi_pilihan1 ?? '';
+            $prodiPilihan2 = $masterEreg->prodi_pilihan2 ?? '';
+        } else {
+            // FALLBACK: Coba ambil dari tabel lain atau gunakan data default
+            $dataSource = 'fallback';
+            
+            // Coba ambil dari data master_moodle username (jika mengandung info prodi)
+            $moodleUser = DB::table('master_moodle')
+                        ->where('master_user_id', $masterMoodleUserId)
+                        ->select('username')
+                        ->first();
+            
+            if ($moodleUser && !empty($moodleUser->username)) {
+                // Coba ekstrak informasi prodi dari username jika memungkinkan
+                $username = $moodleUser->username;
+                $dataSource = 'username_fallback';
+            }
+        }
+
+        // 4. Ambil mapping prodi dari database
+        $prodiMapping = $this->getProdiMapping();
+
+        // 5. Ambil nama prodi dari tabel program_studi
+        $prodiPilihan1Data = null;
+        $prodiPilihan2Data = null;
+
+        // Jika prodi_pilihan1 adalah nama jurusan, coba konversi ke kode prodi
+        if (!empty($prodiPilihan1) && !is_numeric($prodiPilihan1)) {
+            $kodeProdi = $prodiMapping[$prodiPilihan1] ?? null;
+            if ($kodeProdi) {
+                $prodiPilihan1 = $kodeProdi;
+            } else {
+                // Jika tidak ditemukan di mapping, coba cari langsung di database
+                $prodiFromDb = DB::table('program_studi')
+                              ->where('nama_prodi', 'like', '%' . $prodiPilihan1 . '%')
+                              ->select('kode_prodi', 'nama_prodi')
+                              ->first();
+                if ($prodiFromDb) {
+                    $prodiPilihan1 = $prodiFromDb->kode_prodi;
+                    $prodiPilihan1Data = $prodiFromDb;
+                }
+            }
+        }
+
+        if (!empty($prodiPilihan2) && !is_numeric($prodiPilihan2)) {
+            $kodeProdi = $prodiMapping[$prodiPilihan2] ?? null;
+            if ($kodeProdi) {
+                $prodiPilihan2 = $kodeProdi;
+            } else {
+                // Jika tidak ditemukan di mapping, coba cari langsung di database
+                $prodiFromDb = DB::table('program_studi')
+                              ->where('nama_prodi', 'like', '%' . $prodiPilihan2 . '%')
+                              ->select('kode_prodi', 'nama_prodi')
+                              ->first();
+                if ($prodiFromDb) {
+                    $prodiPilihan2 = $prodiFromDb->kode_prodi;
+                    $prodiPilihan2Data = $prodiFromDb;
+                }
+            }
+        }
+
+        // Cari nama prodi dari kode prodi jika belum ada data
+        if (!empty($prodiPilihan1) && is_numeric($prodiPilihan1) && !$prodiPilihan1Data) {
+            $prodiPilihan1Data = DB::table('program_studi')
+                            ->where('kode_prodi', $prodiPilihan1)
+                            ->select('nama_prodi')
+                            ->first();
+        }
+
+        if (!empty($prodiPilihan2) && is_numeric($prodiPilihan2) && !$prodiPilihan2Data) {
+            $prodiPilihan2Data = DB::table('program_studi')
+                            ->where('kode_prodi', $prodiPilihan2)
+                            ->select('nama_prodi')
+                            ->first();
+        }
+
+        // 6. AMBIL DATA KELULUSAN DARI NILAI QUIZ - PERUBAHAN UTAMA
+        $kelulusanInfo = $this->getKelulusanFromNilai($userId, $prodiPilihan1, $prodiPilihan2);
+        
+        return [
+            'nama' => $nama,
+            'email' => $email,
+            'prodi_pilihan1' => $prodiPilihan1,
+            'prodi_pilihan2' => $prodiPilihan2,
+            'nama_prodi_pilihan1' => $prodiPilihan1Data ? $prodiPilihan1Data->nama_prodi : ($prodiPilihan1 ?? ''),
+            'nama_prodi_pilihan2' => $prodiPilihan2Data ? $prodiPilihan2Data->nama_prodi : ($prodiPilihan2 ?? ''),
+            'kelulusan_info' => $kelulusanInfo,
+            'status_kelulusan' => $kelulusanInfo['status'] ?? 'Belum ada data nilai',
+            'prodi_lulus' => $kelulusanInfo['prodi_lulus'] ?? '',
+            'nama_prodi_lulus' => $kelulusanInfo['nama_prodi_lulus'] ?? '',
+            'pilihan_lulus' => $kelulusanInfo['pilihan_lulus'] ?? '',
+            'nilai_quiz' => $kelulusanInfo['nilai'] ?? 0,
+            'user_id' => $userId,
+            'master_user_id' => $masterMoodleUserId,
+            'data_source' => $dataSource
+        ];
+
+    } catch (\Exception $e) {
+        Log::error('Error getting kelulusan data for master_user_id ' . $masterMoodleUserId . ': ' . $e->getMessage());
+        return [
+            'nama' => 'Tidak diketahui',
+            'email' => 'Tidak diketahui',
+            'prodi_pilihan1' => '',
+            'prodi_pilihan2' => '',
+            'nama_prodi_pilihan1' => '',
+            'nama_prodi_pilihan2' => '',
+            'kelulusan_info' => null,
+            'status_kelulusan' => 'Error',
+            'prodi_lulus' => '',
+            'nama_prodi_lulus' => '',
+            'pilihan_lulus' => '',
+            'data_source' => 'error'
+        ];
+    }
+}
+private function getNilaiQuizTerbaru($userId)
+{
+    try {
+        // Default quiz ID
+        $quizId = 1197;
+        
+        // Pastikan moodleRest tersedia
+        $moodleRest = $this->moodleModel->getMoodleRest();
+        if (!$moodleRest) {
+            Log::error('MoodleRest not available for user_id: ' . $userId);
+            return null;
+        }
+
+        // Ambil attempts dari Moodle
+        $attemptParams = [
+            'quizid' => (int)$quizId,
+            'userid' => (int)$userId
+        ];
+
+        Log::info('Getting quiz attempts for user', [
+            'user_id' => $userId,
+            'quiz_id' => $quizId
+        ]);
+
+        $attempts = $moodleRest->request('mod_quiz_get_user_attempts', $attemptParams);
+
+        if (isset($attempts['exception'])) {
+            Log::warning('Error getting quiz attempts for user: ' . $userId . ' - ' . $attempts['exception']);
+            return null;
+        }
+
+        if (!isset($attempts['attempts']) || empty($attempts['attempts'])) {
+            Log::info('No quiz attempts found for user: ' . $userId);
+            return null;
+        }
+
+        // Cari attempt terbaru yang sudah selesai
+        $latestAttempt = null;
+        $highestGrade = 0;
+
+        foreach ($attempts['attempts'] as $attempt) {
+            if (($attempt['state'] === 'finished') && isset($attempt['sumgrades'])) {
+                if ($attempt['sumgrades'] > $highestGrade) {
+                    $highestGrade = $attempt['sumgrades'];
+                    $latestAttempt = $attempt;
+                }
+            }
+        }
+
+        // Jika tidak ada yang finished, ambil attempt terakhir
+        if (!$latestAttempt && !empty($attempts['attempts'])) {
+            $latestAttempt = end($attempts['attempts']);
+            $highestGrade = $latestAttempt['sumgrades'] ?? 0;
+        }
+
+        if ($latestAttempt) {
+            $result = [
+                'nilai' => $highestGrade,
+                'quiz_id' => $quizId,
+                'attempt_id' => $latestAttempt['id'],
+                'state' => $latestAttempt['state'] ?? 'unknown'
+            ];
+
+            // Tambahkan tanggal attempt jika tersedia
+            if (isset($latestAttempt['timestart'])) {
+                $result['attempt_date'] = \Carbon\Carbon::createFromTimestamp($latestAttempt['timestart'])->format('Y-m-d H:i:s');
+            }
+
+            Log::info('Quiz result found for user', [
+                'user_id' => $userId,
+                'nilai' => $highestGrade,
+                'attempt_id' => $latestAttempt['id']
+            ]);
+
+            return $result;
+        }
+
+        Log::info('No valid quiz attempts found for user: ' . $userId);
+        return null;
+
+    } catch (\Exception $e) {
+        Log::error('Error getting nilai quiz for user_id ' . $userId . ': ' . $e->getMessage());
+        return null;
+    }
+}
+
+private function getDataKelulusan($userId)
+{
+    try {
+        // Cari data kelulusan berdasarkan user_id
+        $kelulusan = DB::table('kelulusan')
+                     ->where('user_id', $userId)
+                     ->first();
+
+        if (!$kelulusan) {
+            return [
+                'status' => 'Belum ada data kelulusan',
+                'prodi_lulus' => '',
+                'nama_prodi_lulus' => '',
+                'pilihan_lulus' => '',
+                'keterangan' => 'Data kelulusan tidak ditemukan'
+            ];
+        }
+
+        // Ambil kode prodi lulus
+        $prodiLulus = $kelulusan->prodi_lulus ?? '';
+        $namaProdiLulus = '';
+        $pilihanLulus = '';
+
+        // Cari nama prodi dari kode prodi lulus
+        if (!empty($prodiLulus)) {
+            $prodiData = DB::table('program_studi')
+                         ->where('kode_prodi', $prodiLulus)
+                         ->select('nama_prodi')
+                         ->first();
+            
+            $namaProdiLulus = $prodiData ? $prodiData->nama_prodi : $prodiLulus;
+            
+            // Tentukan pilihan berapa (1 atau 2)
+            // Anda perlu menyesuaikan logika ini dengan struktur database Anda
+            $pilihanLulus = $this->tentukanPilihanLulus($userId, $prodiLulus);
+        }
+
+        return [
+            'status' => $kelulusan->status ?? 'Tidak diketahui',
+            'prodi_lulus' => $prodiLulus,
+            'nama_prodi_lulus' => $namaProdiLulus,
+            'pilihan_lulus' => $pilihanLulus,
+            'tanggal_pengumuman' => $kelulusan->tanggal_pengumuman ?? null,
+            'keterangan' => $kelulusan->keterangan ?? ''
+        ];
+
+    } catch (\Exception $e) {
+        Log::error('Error getting data kelulusan for user_id ' . $userId . ': ' . $e->getMessage());
+        return [
+            'status' => 'Error mengambil data',
+            'prodi_lulus' => '',
+            'nama_prodi_lulus' => '',
+            'pilihan_lulus' => '',
+            'keterangan' => 'Error: ' . $e->getMessage()
+        ];
+    }
+}
+
+private function tentukanPilihanLulus($userId, $prodiLulus)
+{
+    try {
+        // Ambil data prodi pilihan dari master_ereg
+        $masterEreg = DB::table('master_ereg')
+                     ->where('user_id', $userId)
+                     ->select('jurusan1', 'jurusan2')
+                     ->first();
+
+        if (!$masterEreg) {
+            return 'Tidak diketahui';
+        }
+
+        // Bandingkan prodi lulus dengan pilihan 1 dan 2
+        if ($masterEreg->jurusan1 == $prodiLulus) {
+            return 'Pilihan 1';
+        } elseif ($masterEreg->jurusan2 == $prodiLulus) {
+            return 'Pilihan 2';
+        } else {
+            // Jika tidak cocok dengan pilihan 1 atau 2, coba mapping
+            $prodiMapping = $this->getProdiMapping();
+            $kodePilihan1 = $prodiMapping[$masterEreg->jurusan1] ?? $masterEreg->jurusan1;
+            $kodePilihan2 = $prodiMapping[$masterEreg->jurusan2] ?? $masterEreg->jurusan2;
+            
+            if ($kodePilihan1 == $prodiLulus) {
+                return 'Pilihan 1';
+            } elseif ($kodePilihan2 == $prodiLulus) {
+                return 'Pilihan 2';
+            } else {
+                return 'Prodi Lain';
+            }
+        }
+
+    } catch (\Exception $e) {
+        Log::error('Error menentukan pilihan lulus: ' . $e->getMessage());
+        return 'Error';
+    }
+}
+private function getPassingGrade($kodeProdi)
+{
+    try {
+        if (empty($kodeProdi)) {
+            return 100; // Nilai tinggi agar tidak mungkin lulus jika tidak ada prodi
+        }
+
+        $prodi = DB::table('program_studi')
+                 ->where('kode_prodi', $kodeProdi)
+                 ->select('passing_grade')
+                 ->first();
+
+        if ($prodi && $prodi->passing_grade !== null) {
+            return (float)$prodi->passing_grade;
+        }
+
+        // Default passing grade berdasarkan mapping
+        return $this->getDefaultPassingGrade($kodeProdi);
+
+    } catch (\Exception $e) {
+        Log::error('Error getting passing grade for prodi ' . $kodeProdi . ': ' . $e->getMessage());
+        return $this->getDefaultPassingGrade($kodeProdi);
+    }
+}
+private function getDefaultPassingGrade($kodeProdi)
+{
+    $defaultPassingGrades = [
+        '21201' => 17, // Teknik Mesin
+        '26201' => 17, // Teknik Elektro
+        '48201' => 1,  // Khusus 48201 nilai minimum sangat rendah
+        '55201' => 17, // Teknik Informatika
+        '57201' => 17, // Sistem Informasi
+        '61201' => 20, // Akuntansi
+        '62201' => 17, // Manajemen
+        '73201' => 20, // Farmasi
+        '74201' => 17, // Psikologi
+        '86206' => 17, // Hukum
+        '87205' => 5,  // PGSD
+        '86230' => 5,  // PAI
+    ];
+
+    return $defaultPassingGrades[$kodeProdi] ?? 17; // Default 17 jika tidak ada
+}
+    /**
+     * Mapping nama jurusan ke kode prodi dari database
+     * Ambil langsung dari tabel program_studi
+     */
+    private function getProdiMapping()
+    {
+        try {
+            $prodiList = DB::table('program_studi')
+                         ->where('is_aktif', 1)
+                         ->select('kode_prodi', 'nama_prodi')
+                         ->get();
+
+            $mapping = [];
+            foreach ($prodiList as $prodi) {
+                $mapping[$prodi->nama_prodi] = $prodi->kode_prodi;
+                
+                // Tambahkan juga mapping untuk variasi nama yang mungkin
+                $namaVariations = $this->getProdiNameVariations($prodi->nama_prodi);
+                foreach ($namaVariations as $variation) {
+                    $mapping[$variation] = $prodi->kode_prodi;
+                }
+            }
+
+            // Tambahkan mapping khusus jika diperlukan
+            $additionalMapping = [
+                'Tek. Mesin' => '21201',
+                'Tek. Elektro' => '26201',
+                'Tek. Informatika' => '55201',
+                'Sis. Informasi' => '57201',
+                // Tambahkan mapping tambahan jika ada
+            ];
+
+            return array_merge($mapping, $additionalMapping);
+
+        } catch (\Exception $e) {
+            Log::error('Error getting prodi mapping from database: ' . $e->getMessage());
+            
+            // Fallback ke mapping statis jika database error
+            return $this->getStaticProdiMapping();
+        }
+    }
+
+    /**
+     * Generate variasi nama prodi untuk mapping yang lebih baik
+     */
+    private function getProdiNameVariations($namaProdi)
+    {
+        $variations = [];
+        
+        // Hapus kata yang tidak perlu
+        $cleanName = str_replace(['Program Studi', 'Prodi', 'S1', 'S2', 'S3'], '', $namaProdi);
+        $cleanName = trim($cleanName);
+        $variations[] = $cleanName;
+        
+        // Singkatan
+        $words = explode(' ', $cleanName);
+        if (count($words) > 1) {
+            $abbreviation = '';
+            foreach ($words as $word) {
+                if (!empty($word)) {
+                    $abbreviation .= substr($word, 0, 1);
+                }
+            }
+            if (strlen($abbreviation) > 1) {
+                $variations[] = $abbreviation;
+            }
+        }
+        
+        // Tanpa spasi
+        $variations[] = str_replace(' ', '', $cleanName);
+        
+        return array_unique($variations);
+    }
+
+    /**
+     * Fallback mapping statis jika database tidak tersedia
+     */
+    private function getStaticProdiMapping()
+    {
+        return [
+            'Teknik Mesin' => '21201',
+            'Teknik Elektro' => '26201',
+            'Teknik Informatika' => '55201',
+            'Sistem Informasi' => '57201',
+            'Akuntansi' => '61201',
+            'Manajemen' => '62201',
+            'Farmasi' => '73201',
+            'Psikologi' => '74201',
+            'Hukum' => '86206',
+            'PGSD' => '87205',
+            'PAI' => '86230',
+            'PPKN' => '87206',
+            'Pendidikan Guru Sekolah Dasar' => '87205',
+            'Pendidikan Agama Islam' => '86230',
+            'Pendidikan Pancasila dan Kewarganegaraan' => '87206',
+        ];
+    }
+
+    /**
+     * MENAMPILKAN QUIZ ATTEMPTS UNTUK USERS DARI MASTER_MOODLE
+     */
+    public function getQuizAttemptsForMasterMoodleUsers(Request $request)
+{
+    try {
+        $quizId = $request->input('quiz_id', 1197);
+        $limit = $request->input('limit', 50);
+        
+        Log::info("Getting quiz attempts for master_moodle users", [
+            'quiz_id' => $quizId, 
+            'limit' => $limit
+        ]);
+        
+        $result = $this->moodleModel->getQuizAttemptsForMasterMoodleUsers($quizId, $limit);
+
+        if ($result['success']) {
+            // Tambahkan data kelulusan untuk setiap user
+            $usersWithKelulusan = [];
+            foreach ($result['users'] as $user) {
+                try {
+                    $kelulusanData = $this->getKelulusanData($user['master_user_id'] ?? null);
+                    $usersWithKelulusan[] = array_merge($user, $kelulusanData);
+                } catch (\Exception $e) {
+                    Log::error('Error getting kelulusan data for user: ' . ($user['master_user_id'] ?? 'unknown'), [
+                        'error' => $e->getMessage()
+                    ]);
+                    // Tetap tambahkan user tanpa data kelulusan
+                    $usersWithKelulusan[] = array_merge($user, [
+                        'nama' => $user['nama'] ?? 'Error',
+                        'email' => $user['email'] ?? 'Error',
+                        'status_kelulusan' => 'Error',
+                        'prodi_lulus' => '',
+                        'nama_prodi_lulus' => '',
+                        'pilihan_lulus' => ''
+                    ]);
+                }
+            }
+            $result['users'] = $usersWithKelulusan;
+
+            return view('admin.moodle.master-moodle-quiz-attempts', [
+                'users' => $result['users'],
+                'summary' => $result['summary'],
+                'quiz_id' => $result['quiz_id'],
+                'total_users' => $result['total_users'],
+                'limit' => $limit,
+                'success' => true
+            ]);
+        } else {
+            return view('admin.moodle.master-moodle-quiz-attempts', [
+                'error' => $result['error'],
+                'message' => $result['message'] ?? 'Gagal mengambil data quiz attempts',
+                'quiz_id' => $quizId,
+                'success' => false
+            ]);
+        }
+    } catch (\Exception $e) {
+        Log::error('Error getting quiz attempts for master_moodle users: ' . $e->getMessage());
+        return view('admin.moodle.master-moodle-quiz-attempts', [
+            'error' => 'Terjadi kesalahan sistem: ' . $e->getMessage(),
+            'success' => false
+        ]);
+    }
+}
+private function getKelulusanFromNilai($userId, $prodiPilihan1, $prodiPilihan2)
+{
+    try {
+        // 1. Ambil data nilai quiz terbaru dari moodle
+        $nilaiQuiz = $this->getNilaiQuizTerbaru($userId);
+        
+        if (!$nilaiQuiz || $nilaiQuiz['nilai'] === null) {
+            return [
+                'status' => 'Belum mengerjakan quiz',
+                'nilai' => 0,
+                'prodi_lulus' => '',
+                'nama_prodi_lulus' => '',
+                'pilihan_lulus' => '',
+                'keterangan' => 'User belum mengerjakan quiz atau error mengambil data'
+            ];
+        }
+
+        $nilai = $nilaiQuiz['nilai'];
+        $quizId = $nilaiQuiz['quiz_id'];
+        $attemptDate = $nilaiQuiz['attempt_date'] ?? null;
+
+        // 2. Jika tidak ada prodi pilihan
+        if (empty($prodiPilihan1) && empty($prodiPilihan2)) {
+            return [
+                'status' => 'Sudah mengerjakan quiz - Belum memilih prodi',
+                'nilai' => $nilai,
+                'prodi_lulus' => '',
+                'nama_prodi_lulus' => '',
+                'pilihan_lulus' => '',
+                'keterangan' => 'Nilai: ' . $nilai . ' - Belum memilih program studi'
+            ];
+        }
+
+        // 3. Ambil passing grade untuk masing-masing prodi
+        $passingGradeP1 = $this->getPassingGrade($prodiPilihan1);
+        $passingGradeP2 = $this->getPassingGrade($prodiPilihan2);
+
+        // 4. Tentukan status kelulusan
+        $lulusP1 = $nilai >= $passingGradeP1;
+        $lulusP2 = $nilai >= $passingGradeP2;
+
+        // 5. Ambil nama prodi untuk yang lulus
+        $prodiLulus = '';
+        $namaProdiLulus = '';
+        $pilihanLulus = '';
+
+        if ($lulusP1) {
+            $prodiLulus = $prodiPilihan1;
+            $pilihanLulus = 'Pilihan 1';
+        } elseif ($lulusP2) {
+            $prodiLulus = $prodiPilihan2;
+            $pilihanLulus = 'Pilihan 2';
+        }
+
+        // Ambil nama prodi lulus
+        if (!empty($prodiLulus)) {
+            $prodiData = DB::table('program_studi')
+                         ->where('kode_prodi', $prodiLulus)
+                         ->select('nama_prodi')
+                         ->first();
+            $namaProdiLulus = $prodiData ? $prodiData->nama_prodi : $prodiLulus;
+        }
+
+        // 6. Generate hasil kelulusan
+        if ($lulusP1) {
+            return [
+                'status' => 'LULUS',
+                'nilai' => $nilai,
+                'prodi_lulus' => $prodiLulus,
+                'nama_prodi_lulus' => $namaProdiLulus,
+                'pilihan_lulus' => $pilihanLulus,
+                'passing_grade' => $passingGradeP1,
+                'selisih' => $nilai - $passingGradeP1,
+                'keterangan' => 'Lulus di ' . $namaProdiLulus . ' (Pilihan 1) - Nilai: ' . $nilai . ' | Passing: ' . $passingGradeP1,
+                'attempt_date' => $attemptDate,
+                'quiz_id' => $quizId
+            ];
+        } elseif ($lulusP2) {
+            return [
+                'status' => 'LULUS',
+                'nilai' => $nilai,
+                'prodi_lulus' => $prodiLulus,
+                'nama_prodi_lulus' => $namaProdiLulus,
+                'pilihan_lulus' => $pilihanLulus,
+                'passing_grade' => $passingGradeP2,
+                'selisih' => $nilai - $passingGradeP2,
+                'keterangan' => 'Lulus di ' . $namaProdiLulus . ' (Pilihan 2) - Nilai: ' . $nilai . ' | Passing: ' . $passingGradeP2,
+                'attempt_date' => $attemptDate,
+                'quiz_id' => $quizId
+            ];
+        } else {
+            // Tidak lulus di kedua pilihan
+            $selisihP1 = $passingGradeP1 - $nilai;
+            $selisihP2 = $passingGradeP2 - $nilai;
+            
+            return [
+                'status' => 'TIDAK LULUS',
+                'nilai' => $nilai,
+                'prodi_lulus' => '',
+                'nama_prodi_lulus' => '',
+                'pilihan_lulus' => '',
+                'passing_grade_p1' => $passingGradeP1,
+                'passing_grade_p2' => $passingGradeP2,
+                'selisih_p1' => $selisihP1,
+                'selisih_p2' => $selisihP2,
+                'keterangan' => 'Tidak lulus - Butuh ' . $selisihP1 . ' point untuk P1, ' . $selisihP2 . ' point untuk P2',
+                'attempt_date' => $attemptDate,
+                'quiz_id' => $quizId
+            ];
+        }
+
+    } catch (\Exception $e) {
+        Log::error('Error determining kelulusan from nilai for user_id ' . $userId . ': ' . $e->getMessage());
+        return [
+            'status' => 'Error menentukan kelulusan',
+            'nilai' => 0,
+            'prodi_lulus' => '',
+            'nama_prodi_lulus' => '',
+            'pilihan_lulus' => '',
+            'keterangan' => 'Error: ' . $e->getMessage()
+        ];
+    }
+}
+    /**
+     * METHOD: Ambil data user dari profile URL
+     */
+    public function getUserFromProfile(Request $request)
+    {
+        try {
+            $userId = $request->input('user_id');
+            $courseId = $request->input('course_id', 384);
+
+            if (!$userId) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'User ID diperlukan'
+                ]);
+            }
+
+            $result = $this->moodleModel->getUserFromProfileUrl($userId, $courseId);
+            return response()->json($result);
+
+        } catch (\Exception $e) {
+            Log::error('Error getting user from profile: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * METHOD: Ambil multiple users dari profile URLs
+     */
+    public function getUsersFromProfiles(Request $request)
+    {
+        try {
+            $userIds = $request->input('user_ids', []);
+            $courseId = $request->input('course_id', 384);
+
+            // Jika user_ids berupa string, convert ke array
+            if (is_string($userIds)) {
+                $userIds = array_map('trim', explode(',', $userIds));
+            }
+
+            if (empty($userIds)) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'User IDs diperlukan'
+                ]);
+            }
+
+            $result = $this->moodleModel->getUsersFromProfileUrls($userIds, $courseId);
+            return response()->json($result);
+
+        } catch (\Exception $e) {
+            Log::error('Error getting users from profiles: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * MENDAPATKAN USERS BERDASARKAN EMAIL DARI COURSE
+     */
+    public function getUsersByEmail(Request $request)
+    {
+        try {
+            $courseId = $request->input('course_id', 384);
+            $emails = $request->input('emails', []);
+            
+            // Jika emails berupa string, convert ke array
+            if (is_string($emails)) {
+                $emails = array_map('trim', explode(',', $emails));
+            }
+            
+            Log::info("Getting users by email from course", [
+                'course_id' => $courseId,
+                'emails' => $emails
+            ]);
+
+            $result = $this->moodleModel->getUsersByEmailFromCourse($courseId, $emails);
+            return response()->json($result);
+
+        } catch (\Exception $e) {
+            Log::error('Error getting users by email: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * MENAMPILKAN QUIZ ATTEMPTS UNTUK SEMUA USER PMB - UTAMA
+     */
+    public function getQuizAttemptsForPmbUsers(Request $request)
+    {
+        try {
+            $quizId = $request->input('quiz_id', 1197);
+            $limit = $request->input('limit', 50);
+            
+            Log::info("Getting quiz attempts for PMB users", [
+                'quiz_id' => $quizId, 
+                'limit' => $limit
+            ]);
+            
+            $result = $this->moodleModel->getQuizAttemptsForPmbUsers($quizId, $limit);
+
+            if ($result['success']) {
+                return view('admin.moodle.quiz-attempts', [
+                    'users' => $result['users'],
+                    'summary' => $result['summary'],
+                    'quiz_id' => $result['quiz_id'],
+                    'total_users' => $result['total_users'],
+                    'limit' => $limit,
+                    'success' => true
+                ]);
+            } else {
+                return view('admin.moodle.quiz-attempts', [
+                    'error' => $result['error'],
+                    'message' => $result['message'] ?? 'Gagal mengambil data quiz attempts',
+                    'quiz_id' => $quizId,
+                    'success' => false
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error getting quiz attempts: ' . $e->getMessage());
+            return view('admin.moodle.quiz-attempts', [
+                'error' => 'Terjadi kesalahan sistem: ' . $e->getMessage(),
+                'success' => false
+            ]);
+        }
+    }
+
+    /**
+     * GET QUIZ INFORMATION
+     */
+    public function getQuizInfo(Request $request)
+    {
+        try {
+            $quizId = $request->input('quiz_id', 1197);
+            $result = $this->moodleModel->getQuizInfo($quizId);
+            return response()->json($result);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * MENDAPATKAN QUIZ ATTEMPTS BERDASARKAN EMAIL
+     */
+    public function getQuizAttemptsForUsersByEmail(Request $request)
+    {
+        try {
+            $courseId = $request->input('course_id', 384);
+            $quizId = $request->input('quiz_id', 1197);
+            $emails = $request->input('emails', []);
+            $limit = $request->input('limit', 50);
+            
+            // Jika emails berupa string, convert ke array
+            if (is_string($emails)) {
+                $emails = array_map('trim', explode(',', $emails));
+            }
+            
+            Log::info("Getting quiz attempts for users by email", [
+                'course_id' => $courseId,
+                'quiz_id' => $quizId,
+                'emails_count' => count($emails),
+                'limit' => $limit
+            ]);
+
+            $result = $this->moodleModel->getQuizAttemptsForUsersByEmail($courseId, $quizId, $emails, $limit);
+
+            if ($request->wantsJson()) {
+                return response()->json($result);
+            }
+
+            // Untuk view HTML
+            if ($result['success']) {
+                return view('admin.moodle.users-by-email', [
+                    'users' => $result['users'],
+                    'summary' => $result['summary'],
+                    'not_found_emails' => $result['not_found_emails'],
+                    'course_id' => $result['course_id'],
+                    'quiz_id' => $result['quiz_id'],
+                    'success' => true
+                ]);
+            } else {
+                return view('admin.moodle.users-by-email', [
+                    'error' => $result['error'],
+                    'message' => $result['message'] ?? 'Gagal mengambil data',
+                    'course_id' => $courseId,
+                    'quiz_id' => $quizId,
+                    'success' => false
+                ]);
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Error getting quiz attempts for users by email: ' . $e->getMessage());
+            
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'error' => $e->getMessage()
+                ]);
+            }
+            
+            return view('admin.moodle.users-by-email', [
+                'error' => 'Terjadi kesalahan sistem: ' . $e->getMessage(),
+                'success' => false
+            ]);
+        }
+    }
+}

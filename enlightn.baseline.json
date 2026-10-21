@@ -1,0 +1,14 @@
+{
+    "Enlightn\\Enlightn\\Analyzers\\Security\\XssAnalyzer": [
+        {
+            "message": "Your application is not adequately protected from XSS attacks.",
+            "files": []
+        }
+    ],
+    "Enlightn\\Enlightn\\Analyzers\\Security\\FilePermissionsAnalyzer": [
+        {
+            "message": "Your application's project directory permissions are not setup in a secure manner.",
+            "files": []
+        }
+    ]
+}

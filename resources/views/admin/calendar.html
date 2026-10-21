@@ -1,0 +1,83 @@
+<?php
+
+namespace Database\Seeders;
+
+use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Carbon\Carbon;
+
+class UserAdminSeeder extends Seeder
+{
+    /**
+     * Run the database seeds.
+     */
+    public function run(): void
+    {
+        $now = Carbon::now();
+
+        $admins = [
+            // Admin Akademik
+            [
+                'name' => 'Admin Akademik',
+                'email' => 'akademik@ubpkarawang.ac.id',
+                'email_verified_at' => $now,
+                'password' => Hash::make('Pmb2025'),
+                'remember_token' => null,
+                'created_at' => $now,
+                'updated_at' => $now,
+                'phone' => '081234567891',
+                'bio' => 'Admin bagian akademik PMB UBPKarawang',
+                'country' => 'Indonesia',
+                'city' => 'Karawang',
+                'postal_code' => '-',
+                'role' => 'admin_akademik',
+                'gelombang' => null,
+                'promo_code_used' => null,
+                'va_number' => null,
+                'va_amount' => null,
+                'original_amount' => null,
+                'discount_amount' => 0.00,
+                'va_expired_at' => null,
+                'va_status' => null,
+            ],
+            // Admin Farmasi
+            [
+                'name' => 'Admin Farmasi',
+                'email' => 'farmasi@ubpkarawang.ac.id',
+                'email_verified_at' => $now,
+                'password' => Hash::make('Pmb2025'),
+                'remember_token' => null,
+                'created_at' => $now,
+                'updated_at' => $now,
+                'phone' => '081234567892',
+                'bio' => 'Admin bagian farmasi PMB UBPKarawang',
+                'country' => 'Indonesia',
+                'city' => 'Karawang',
+                'postal_code' => '-',
+                'role' => 'admin_farmasi',
+                'gelombang' => null,
+                'promo_code_used' => null,
+                'va_number' => null,
+                'va_amount' => null,
+                'original_amount' => null,
+                'discount_amount' => 0.00,
+                'va_expired_at' => null,
+                'va_status' => null,
+            ],
+        ];
+
+        // Cek apakah email sudah ada sebelum insert
+        foreach ($admins as $admin) {
+            $existingUser = DB::table('users')->where('email', $admin['email'])->first();
+            
+            if (!$existingUser) {
+                DB::table('users')->insert($admin);
+                $this->command->info("User {$admin['name']} ({$admin['email']}) berhasil dibuat.");
+            } else {
+                $this->command->warn("User {$admin['email']} sudah ada, dilewati.");
+            }
+        }
+    }
+}

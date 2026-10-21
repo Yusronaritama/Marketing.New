@@ -1,0 +1,152 @@
+<?php
+function no_ujian($glombang, $id)
+	{
+
+
+		$data = $this->db->get_where('master_virtual', ['va' => $id])->row();
+		$MoodleRest = new MoodleRest('https://elearning2.ubpkarawang.ac.id/webservice/rest/server.php', '9d812708c38116dbbe03864ccb860b52');
+		$users = array('users' => array(array(
+			'username' => $data->va,
+			'password' => $data->no_hp,
+			'lastname' => $data->nama,
+			'firstname' => $data->va,
+			'email' => 'pmb' . $data->va . '@pmb.ubpkarawang.ac.id',
+			'customfields' => array(
+				array(
+					'type' => "nip",
+					'value' => $data->va,
+				),
+				array(
+					'type' => "klas",
+					'value' => "usm2020",
+				),
+				array(
+					'type' => "nomortelpon",
+					'value' => "089797979899",
+				),
+			),
+		)));
+		$groups = $MoodleRest->request('core_user_create_users', $users);
+		print_r($users);
+		print_r($groups);
+		if ($groups['errorcode']) {
+			return false;
+		} else {
+			try {
+				$this->update_boc_course($groups[0]['id']);
+				$data = array(
+					'id_pendaftar' => $id,
+					'id_elearning' => $groups[0]['id']
+				);
+				$this->db->insert('no_ujian', $data);
+			} catch (\Throwable $th) {
+				return false;
+			}
+
+
+
+			if (isset($groups[0])) {
+				return true;
+			} else {
+				return false;
+				//$this->crud->update('periode',['status' => 1],['tahun' => $periode]);
+			}
+
+			return $groups;
+		}
+	}
+
+	public function update_boc_course($id_user)
+	{
+		require_once(APPPATH . 'libraries/MoodleRest.php');
+		$MoodleRest = new MoodleRest('https://elearning2.ubpkarawang.ac.id/webservice/rest/server.php', '9d812708c38116dbbe03864ccb860b52');
+
+		$users = array('enrolments' => array(array(
+			'roleid' => '5',
+			'userid' => $id_user,
+			'courseid' => '384',
+		)));
+		$userss = array(
+			'courseid' => '384',
+			'password' => 'PMBUBP2020'
+		);
+		$groups = $MoodleRest->request('enrol_manual_enrol_users', $users);
+		return;
+		// print_r($groups);
+	}
+
+    function no_ujian($glombang, $id)
+	{
+
+
+		$data = $this->db->get_where('master_virtual', ['va' => $id])->row();
+		$MoodleRest = new MoodleRest('https://elearning2.ubpkarawang.ac.id/webservice/rest/server.php', '9d812708c38116dbbe03864ccb860b52');
+		$users = array('users' => array(array(
+			'username' => $data->va,
+			'password' => $data->no_hp,
+			'lastname' => $data->nama,
+			'firstname' => $data->va,
+			'email' => 'pmb' . $data->va . '@pmb.ubpkarawang.ac.id',
+			'customfields' => array(
+				array(
+					'type' => "nip",
+					'value' => $data->va,
+				),
+				array(
+					'type' => "klas",
+					'value' => "usm2020",
+				),
+				array(
+					'type' => "nomortelpon",
+					'value' => "089797979899",
+				),
+			),
+		)));
+		$groups = $MoodleRest->request('core_user_create_users', $users);
+		print_r($users);
+		print_r($groups);
+		if ($groups['errorcode']) {
+			return false;
+		} else {
+			try {
+				$this->update_boc_course($groups[0]['id']);
+				$data = array(
+					'id_pendaftar' => $id,
+					'id_elearning' => $groups[0]['id']
+				);
+				$this->db->insert('no_ujian', $data);
+			} catch (\Throwable $th) {
+				return false;
+			}
+
+
+
+			if (isset($groups[0])) {
+				return true;
+			} else {
+				return false;
+				//$this->crud->update('periode',['status' => 1],['tahun' => $periode]);
+			}
+
+			return $groups;
+		}
+	}
+
+	public function update_boc_course($id_user)
+	{
+		require_once(APPPATH . 'libraries/MoodleRest.php');
+		$MoodleRest = new MoodleRest('https://elearning2.ubpkarawang.ac.id/webservice/rest/server.php', '9d812708c38116dbbe03864ccb860b52');
+
+		$users = array('enrolments' => array(array(
+			'roleid' => '5',
+			'userid' => $id_user,
+			'courseid' => '384',
+		)));
+		$userss = array(
+			'courseid' => '384',
+			'password' => 'PMBUBP2020'
+		);
+		$groups = $MoodleRest->request('enrol_manual_enrol_users', $users);
+		return;
+		// print_r($groups);
+	}advcuo
